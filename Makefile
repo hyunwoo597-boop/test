@@ -11,7 +11,7 @@ INCLUDES := include
 ROMFS := romfs
 APP_TITLE := RE5 Korean Patch Installer
 APP_AUTHOR := RE5 Korean Patch Project
-APP_VERSION := 12.0.0
+APP_VERSION := 12.2.0
 
 ARCH := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 CFLAGS := -g -Wall -O2 -ffunction-sections $(ARCH) $(DEFINES)
