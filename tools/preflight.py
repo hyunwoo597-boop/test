@@ -9,7 +9,7 @@ ARC_DIR = ROOT / "romfs" / "payload" / "atmosphere" / "contents" / TITLE / "romf
 expected = {
     "CoreResource.arc": (15960334, "a14416f05f3d7c83561a9d09ae0bd07565aab09da5a9f19ef5a2a1d8d253c174"),
     "GuiTextResource.arc": (115004, "7decf69ef9198a9112cf0d91d4a762861ead28e642287bb298c160a8167a9671"),
-    "Msg2Resource_e.arc": (145129, "25c49f1bc704a40216c297a5d8a186565a7b5adf35bbc74841f4bbb51e30a755"),
+    "Msg2Resource_e.arc": (145129, "e353214ba3e4e28ad45ddfbfaa889ca9f37da748184183ecfdc6948d0aac21cf"),
 }
 
 ap = argparse.ArgumentParser()
@@ -39,6 +39,15 @@ for name, (size, sha) in expected.items():
     if actual_sha != sha:
         die(f"{name}: sha256 mismatch")
     print(f"OK {name} {actual_size} {actual_sha}")
+
+
+
+ips = ROOT / "romfs" / "payload" / "atmosphere" / "exefs_patches" / "RE5_Manual_CrashFix" / "C517ECBB79DE97338E98147A6B5B5F2B.ips"
+if not ips.is_file():
+    die("MANUAL CrashFix IPS missing")
+if ips.read_bytes() != b"IPS32" + bytes.fromhex("00 CE 65 68 00 04 31 00 00 14") + b"EEOF":
+    die("MANUAL CrashFix IPS content mismatch")
+print(f"OK MANUAL CrashFix IPS {ips.stat().st_size} bytes")
 
 for needed in ["Makefile", "npdm.json", "tools/build_installer_nsp.sh", "tools/merge_nsp.py", "tools/download_update_release.py"]:
     if not (ROOT / needed).is_file():

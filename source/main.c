@@ -1,5 +1,6 @@
 #include <switch.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -17,6 +18,7 @@ static const PatchFile g_files[] = {
     {"CoreResource.arc",     "romfs:/payload/atmosphere/contents/" TITLE_ID "/romfs/nativeNXx64/ImgNX/Archive/CoreResource.arc",     PATCH_ROOT "/CoreResource.arc"},
     {"GuiTextResource.arc",  "romfs:/payload/atmosphere/contents/" TITLE_ID "/romfs/nativeNXx64/ImgNX/Archive/GuiTextResource.arc",  PATCH_ROOT "/GuiTextResource.arc"},
     {"Msg2Resource_e.arc",   "romfs:/payload/atmosphere/contents/" TITLE_ID "/romfs/nativeNXx64/ImgNX/Archive/Msg2Resource_e.arc",   PATCH_ROOT "/Msg2Resource_e.arc"},
+    {"MANUAL CrashFix IPS",   "romfs:/payload/atmosphere/exefs_patches/RE5_Manual_CrashFix/C517ECBB79DE97338E98147A6B5B5F2B.ips", "sdmc:/atmosphere/exefs_patches/RE5_Manual_CrashFix/C517ECBB79DE97338E98147A6B5B5F2B.ips"},
 };
 
 static int mkdir_p(const char *path) {
@@ -82,6 +84,96 @@ static int verify_one(const PatchFile *pf) {
     return (a >= 0 && b == a) ? 0 : -1;
 }
 
+
+#define FB_WIDTH 1280
+#define FB_HEIGHT 720
+#define MANUAL_PAGE_COUNT 5
+#define MANUAL_FRAME_BYTES (FB_WIDTH * FB_HEIGHT * 2)
+
+static const char *g_manual_pages[MANUAL_PAGE_COUNT] = {
+    "romfs:/manual/page1.rgb565",
+    "romfs:/manual/page2.rgb565",
+    "romfs:/manual/page3.rgb565",
+    "romfs:/manual/page4.rgb565",
+    "romfs:/manual/page5.rgb565"
+};
+
+static int load_manual_page(int page, void *dst) {
+    if (page < 0 || page >= MANUAL_PAGE_COUNT || !dst) return -1;
+    FILE *f = fopen(g_manual_pages[page], "rb");
+    if (!f) return -2;
+    size_t got = fread(dst, 1, MANUAL_FRAME_BYTES, f);
+    int err = ferror(f);
+    fclose(f);
+    if (err || got != MANUAL_FRAME_BYTES) return -3;
+    return 0;
+}
+
+/*
+ * Full-screen manual gallery.
+ * L/R: previous/next page
+ * A: continue to the normal installer menu
+ * +: exit application
+ */
+static bool show_manual_gallery(PadState *pad) {
+    Framebuffer fb;
+    Result rc = framebufferCreate(&fb, nwindowGetDefault(),
+                                  FB_WIDTH, FB_HEIGHT,
+                                  PIXEL_FORMAT_RGB_565, 2);
+    if (R_FAILED(rc)) return true; // Fallback to text installer.
+
+    rc = framebufferMakeLinear(&fb);
+    if (R_FAILED(rc)) {
+        framebufferClose(&fb);
+        return true;
+    }
+
+    u16 *pagebuf = (u16*)malloc(MANUAL_FRAME_BYTES);
+    if (!pagebuf) {
+        framebufferClose(&fb);
+        return true;
+    }
+
+    int page = 0;
+    int loaded = -1;
+    bool continue_to_installer = true;
+
+    while (appletMainLoop()) {
+        padUpdate(pad);
+        u64 down = padGetButtonsDown(pad);
+
+        if (down & HidNpadButton_Plus) {
+            continue_to_installer = false;
+            break;
+        }
+        if (down & HidNpadButton_A) break;
+
+        if ((down & HidNpadButton_L) && page > 0) page--;
+        if ((down & HidNpadButton_R) && page < MANUAL_PAGE_COUNT-1) page++;
+
+        if (loaded != page) {
+            if (load_manual_page(page, pagebuf) != 0) {
+                // Don't crash on a missing page; continue to installer.
+                break;
+            }
+            loaded = page;
+        }
+
+        u32 stride = 0;
+        u8 *dst = (u8*)framebufferBegin(&fb, &stride);
+        for (u32 y=0; y<FB_HEIGHT; y++) {
+            memcpy(dst + y*stride,
+                   (u8*)pagebuf + y*FB_WIDTH*2,
+                   FB_WIDTH*2);
+        }
+        framebufferEnd(&fb);
+    }
+
+    free(pagebuf);
+    framebufferClose(&fb);
+    return continue_to_installer;
+}
+
 static void install_patch(void) {
     printf("\n[INSTALL] Korean patch -> Atmosphere LayeredFS\n");
     int failures = 0;
@@ -121,7 +213,7 @@ static void remove_patch(void) {
         else
             printf("  FAIL %s (errno=%d)\n", g_files[i].name, errno);
     }
-    printf("Only the three Korean patch files were targeted.\n");
+    printf("Only RE5 Korean patch and MANUAL crash-fix files were targeted.\n");
 }
 
 int main(int argc, char **argv) {
@@ -147,7 +239,15 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printf("RE5 Korean Patch Installer v9\n");
+    if (!show_manual_gallery(&pad)) {
+        romfsExit();
+        consoleExit(NULL);
+        return 0;
+    }
+
+    // Restore/clear text console after framebuffer gallery.
+    consoleClear();
+    printf("RE5 Korean Patch Installer v11\n");
     printf("Target: Resident Evil 5 / %s\n\n", TITLE_ID);
     printf("A  Install / overwrite Korean patch\n");
     printf("X  Verify installed files\n");

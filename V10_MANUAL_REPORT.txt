@@ -1,0 +1,10 @@
+V10 manual gallery
+Behavior: launch -> 5 full-screen manual pages -> L/R navigate -> A installer -> + exit
+Format: 1280x720 RGB565 raw, 1,843,200 bytes/page
+Existing v9 install/verify/remove logic preserved.
+
+page1: 1000614060.png original=1536x1024 fitted=1080x720 raw=1843200
+page2: 1000614057.png original=1536x1056 fitted=1047x720 raw=1843200
+page3: 1000614056.png original=1536x1034 fitted=1070x720 raw=1843200
+page4: 1000614058.png original=1536x1032 fitted=1072x720 raw=1843200
+page5: 1000614059.png original=1536x1036 fitted=1067x720 raw=1843200
