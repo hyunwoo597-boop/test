@@ -62,9 +62,9 @@ make -C hacBrewPack-src -j2
 test -x hacBrewPack-src/hacbrewpack || { echo "hacbrewpack build failed" >&2; exit 5; }
 
 echo "=== package installer NSP ==="
+echo "hacBrewPack reads TitleID from control/control.nacp."
 ./hacBrewPack-src/hacbrewpack \
   --keyset "$PROD_KEYS" \
-  --titleid "$TITLEID" \
   --exefsdir exefs \
   --romfsdir romfs \
   --controldir control \
