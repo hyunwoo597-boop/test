@@ -145,6 +145,23 @@ static int load_gallery_page(int page_index, void *dst) {
  * A: continue to installer menu
  * +: exit application
  */
+
+#define GALLERY_CONTROL_HEIGHT 54
+#define GALLERY_CONTROL_BYTES (FB_WIDTH * GALLERY_CONTROL_HEIGHT * 2)
+
+static void gallery_apply_korean_controls(u16 *pagebuf) {
+    if (!pagebuf) return;
+    FILE *f = fopen("romfs:/gallery/controls_ko.rgb565", "rb");
+    if (!f) return;
+
+    static u16 controls[FB_WIDTH * GALLERY_CONTROL_HEIGHT];
+    size_t got = fread(controls, 1, GALLERY_CONTROL_BYTES, f);
+    fclose(f);
+    if (got != GALLERY_CONTROL_BYTES) return;
+
+    memcpy(pagebuf, controls, GALLERY_CONTROL_BYTES);
+}
+
 static bool show_random_gallery(PadState *pad) {
     Framebuffer fb;
     Result rc = framebufferCreate(&fb, nwindowGetDefault(),
@@ -190,6 +207,7 @@ static bool show_random_gallery(PadState *pad) {
 
         if (loaded_pos != pos) {
             if (load_gallery_page(order[pos], pagebuf) != 0) break;
+            gallery_apply_korean_controls(pagebuf);
             loaded_pos = pos;
         }
 
