@@ -276,14 +276,17 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    // The text console owns the default window framebuffer.
+    // Release it before creating the full-screen gallery framebuffer.
+    consoleExit(NULL);
+
     if (!show_random_gallery(&pad)) {
         romfsExit();
-        consoleExit(NULL);
         return 0;
     }
 
-    // Restore the text console after the full-screen framebuffer gallery.
-    consoleClear();
+    // Recreate the text console after leaving the full-screen gallery.
+    consoleInit(NULL);
     printf("RE5 Korean Patch Installer v15\n");
     printf("Target: Resident Evil 5 / %s\n\n", TITLE_ID);
     printf("A  Install / overwrite Korean patch\n");
