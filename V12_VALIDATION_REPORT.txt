@@ -1,0 +1,20 @@
+OK CoreResource.arc 15960334 a14416f05f3d7c83561a9d09ae0bd07565aab09da5a9f19ef5a2a1d8d253c174
+OK GuiTextResource.arc 115004 7decf69ef9198a9112cf0d91d4a762861ead28e642287bb298c160a8167a9671
+OK Msg2Resource_e.arc 145129 e353214ba3e4e28ad45ddfbfaa889ca9f37da748184183ecfdc6948d0aac21cf
+OK 좌우 속도 glyph token x2
+OK manual page 1 a3703e93873464e1497d93718772a352674e31054483a77b13444a4b04f9caad
+OK manual page 2 fd430f02127daa38382c73a0336b1be62ab52ed67ad11658ceb784f82784dd01
+OK manual page 3 fa2366975dc322d3ebc105669f4dcf7152d9753983ecd661f4a6a825229b155f
+OK manual page 4 0c413de69ab1ff5a178db1e37e664770adcc270cc9d8fcbb3de4c17e0d3a6fbf
+OK manual page 5 20a9a2d812856219d98775b54eaa4bf769d390609cf194352c04e88007ada048
+OK CrashFix IPS db3395eb48bb5661e5706cf1a439df2c7ecb7f8619fc708d22c87d5dcfcb6496
+OK gallery is connected to app startup and installer payload
+OK RomFS physical payload bytes 25437963
+PREFLIGHT PASS
+
+Build-output guard:
+- GitHub Actions runs tools/verify_nsp.py against the ACTUAL generated NSP.
+- It rejects the build if the largest NCA is below 25,000,000 bytes.
+- The previous photo-less installer program NCA was about 16.48 MB.
+- This source RomFS is 25+ MB and contains page1..page5 RGB565 files physically.
+- Exact existing Installer Title ID is derived from the included known-good base NSP using the user's prod.keys during CI; no new Title ID is invented.
