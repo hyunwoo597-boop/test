@@ -67,8 +67,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth 1 https://github.com/pplatoon/hacBrewPack.git hacBrewPack-src
+          rm -rf hacBrewPack-src
+          git clone --depth 1 --recurse-submodules https://github.com/pplatoon/hacBrewPack.git hacBrewPack-src
+          cp hacBrewPack-src/config.mk.template hacBrewPack-src/config.mk
+          test -s hacBrewPack-src/config.mk
           make -C hacBrewPack-src -j2
+          test -x hacBrewPack-src/hacbrewpack
 
       - name: Pack NSP
         shell: bash
