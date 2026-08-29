@@ -43,11 +43,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          make -j2
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITA64=/opt/devkitpro/devkitA64
+          export PATH="$DEVKITA64/bin:$DEVKITPRO/tools/bin:$PATH"
+
+          # Hard fail if the host x86 linker/compiler would be used.
+          command -v aarch64-none-elf-gcc
+          command -v aarch64-none-elf-ld
+          aarch64-none-elf-gcc --version | head -1
+          aarch64-none-elf-ld --version | head -1
+
+          make clean || true
+          make -j2 CC="$DEVKITA64/bin/aarch64-none-elf-gcc" CXX="$DEVKITA64/bin/aarch64-none-elf-g++" LD="$DEVKITA64/bin/aarch64-none-elf-g++" AR="$DEVKITA64/bin/aarch64-none-elf-gcc-ar" OBJCOPY="$DEVKITA64/bin/aarch64-none-elf-objcopy" STRIP="$DEVKITA64/bin/aarch64-none-elf-strip"
           mkdir -p exefs
           elf2nso RE5_Korean_Patch_Installer.elf exefs/main
           npdmtool npdm.json exefs/main.npdm
-          nacptool --create "RE5 Korean Patch Installer" "RE5 Korean Patch Project" "12.2.0" control/control.nacp --titleid="$TITLEID"
+          nacptool --create "RE5 Korean Patch Installer" "RE5 Korean Patch Project" "12.3.0" control/control.nacp --titleid="$TITLEID"
           test -s exefs/main
           test -s exefs/main.npdm
           test -s control/control.nacp
@@ -67,20 +78,20 @@ jobs:
           ./hacBrewPack-src/hacbrewpack --keyset /tmp/prod.keys --titleid "$TITLEID" --exefsdir exefs --romfsdir romfs --controldir control --nologo
           NSP="$(find hacbrewpack_nsp -type f -name '*.nsp' | head -1)"
           test -n "$NSP"
-          cp "$NSP" RE5_Korean_Patch_Installer_v12_2.nsp
+          cp "$NSP" RE5_Korean_Patch_Installer_v12_3.nsp
 
       - name: Verify actual built NSP includes manual image payload
-        run: python3 tools/verify_nsp.py RE5_Korean_Patch_Installer_v12_2.nsp
+        run: python3 tools/verify_nsp.py RE5_Korean_Patch_Installer_v12_3.nsp
 
       - name: Output hashes
         shell: bash
         run: |
-          sha256sum RE5_Korean_Patch_Installer_v12_2.nsp > SHA256SUMS.txt
+          sha256sum RE5_Korean_Patch_Installer_v12_3.nsp > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RE5_Korean_Patch_Installer_v12_2_VERIFIED
+          name: RE5_Korean_Patch_Installer_v12_3_VERIFIED
           path: |
-            RE5_Korean_Patch_Installer_v12_2.nsp
+            RE5_Korean_Patch_Installer_v12_3.nsp
             SHA256SUMS.txt
