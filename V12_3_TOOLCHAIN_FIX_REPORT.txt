@@ -1,9 +1,0 @@
-RE5 v12.3 toolchain fix
-- Removed ambiguity between Ubuntu host ld and devkitA64 linker.
-- Build step exports DEVKITPRO=/opt/devkitpro
-- Build step exports DEVKITA64=/opt/devkitpro/devkitA64
-- devkitA64/bin is prepended to PATH.
-- Make invocation explicitly pins CC/CXX/LD/AR/OBJCOPY/STRIP to aarch64-none-elf tools.
-- Makefile also pins PREFIX/CC/CXX/AR/OBJCOPY/STRIP.
-- Workflow hard-fails before compilation if aarch64-none-elf-gcc or ld is unavailable.
-- Existing fixed Title ID, Korean patch, typo fix, manual images, and CrashFix are unchanged.
