@@ -41,3 +41,8 @@ RE5-Update-1.11-KoreanPatch-AllInOne-FINAL
  -> 한글패치 Installer NSP 빌드
  -> Update NSP + Installer NSP를 한 PFS0 멀티타이틀 NSP로 병합
  -> Artifact 업로드
+
+v6 수정:
+- devkitPro 컨테이너에 없는 aarch64-none-elf-nm 의존성 제거.
+- ELF 링크 성공 자체로 crt0 -> main 해결을 검증하고 ELF/NSO/NPDM 실파일을 확인.
+- 이전 실행 로그에서 ELF와 NSO/NSP가 실제 생성된 뒤 검증 명령만 실패한 문제를 수정.
