@@ -1,5 +1,6 @@
 from pathlib import Path
-import hashlib, json, struct, zlib, sys
+import hashlib
+import re, json, struct, zlib, sys
 ROOT=Path(__file__).resolve().parents[1]
 
 def die(s): print('FAIL:',s); sys.exit(1)
@@ -58,7 +59,7 @@ wf=(ROOT/'.github/workflows/build.yml').read_text(encoding='utf-8')
 if 'python3 -m pip' in wf or 'pip install' in wf: die('workflow unexpectedly depends on pip')
 if 'extract_base_titleid' in wf or 'Derive the exact existing Installer Title ID' in wf: die('workflow still contains NCA Title-ID derivation')
 if 'TITLEID: "0500000000000001"' not in wf: die('fixed Installer TITLEID missing')
-if '--titleid "$TITLEID"' not in wf: die('hacBrewPack fixed TITLEID argument missing')
+if not re.search(r'--titleid(?:=|\s+)["\']?\$TITLEID["\']?', wf): die('hacBrewPack fixed TITLEID argument missing')
 npdm=json.loads((ROOT/'npdm.json').read_text(encoding='utf-8'))
 for k in ('title_id','title_id_range_min','title_id_range_max'):
  if npdm.get(k,'').lower()!='0x0500000000000001': die(f'npdm {k} mismatch')
