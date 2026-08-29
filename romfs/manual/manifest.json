@@ -1,0 +1,37 @@
+[
+  {
+    "page": 1,
+    "source_name": "닌텐도 스위치 조작 방법 안내서.png",
+    "raw_size": 1843200,
+    "raw_sha256": "a3703e93873464e1497d93718772a352674e31054483a77b13444a4b04f9caad",
+    "source_sha256": "bdfbbc1c6c46b31c29b7a2a901ce10a5b41a8e2209673aeab5f3be2e562a6e8b"
+  },
+  {
+    "page": 2,
+    "source_name": "Joy-Con 조작 방법 안내페이지.png",
+    "raw_size": 1843200,
+    "raw_sha256": "fd430f02127daa38382c73a0336b1be62ab52ed67ad11658ceb784f82784dd01",
+    "source_sha256": "bfd0adf2a3d1646f08df54b7a38cfbc400b3bef64b060072dd52c3efae7a816c"
+  },
+  {
+    "page": 3,
+    "source_name": "레지던트 이블 5 한국어 게임 매뉴얼 화면.png",
+    "raw_size": 1843200,
+    "raw_sha256": "fa2366975dc322d3ebc105669f4dcf7152d9753983ecd661f4a6a825229b155f",
+    "source_sha256": "09c90313557736083f5c6c451f9af2e2165680cfe730394c54090e26b6cb3e6d"
+  },
+  {
+    "page": 4,
+    "source_name": "레지던트 이블 5 협력 플레이 가이드.png",
+    "raw_size": 1843200,
+    "raw_sha256": "0c413de69ab1ff5a178db1e37e664770adcc270cc9d8fcbb3de4c17e0d3a6fbf",
+    "source_sha256": "952fafbc739dcc92bba29b1d4bbc3dacfbb2eda05c495f4bf5ac337444be2c14"
+  },
+  {
+    "page": 5,
+    "source_name": "레지던트 이블 5 모션 조작 안내.png",
+    "raw_size": 1843200,
+    "raw_sha256": "20a9a2d812856219d98775b54eaa4bf769d390609cf194352c04e88007ada048",
+    "source_sha256": "a708a6903f34a2dfbb60979aaae223779a989df7763da92bf78f029f8c3074a5"
+  }
+]
