@@ -3,6 +3,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 #define TITLE_ID "010018100CD46000"
 #define PATCH_ROOT "sdmc:/atmosphere/contents/" TITLE_ID "/romfs/nativeNXx64/ImgNX/Archive"
@@ -250,6 +252,8 @@ static void remove_patch(void) {
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     consoleInit(NULL);
 
     PadState pad;
