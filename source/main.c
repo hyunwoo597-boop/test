@@ -149,17 +149,14 @@ static int load_gallery_page(int page_index, void *dst) {
 #define GALLERY_CONTROL_HEIGHT 54
 #define GALLERY_CONTROL_BYTES (FB_WIDTH * GALLERY_CONTROL_HEIGHT * 2)
 
-static void gallery_apply_korean_controls(u16 *pagebuf) {
-    if (!pagebuf) return;
+static u16 g_gallery_controls[FB_WIDTH * GALLERY_CONTROL_HEIGHT];
+
+static void gallery_load_korean_controls(void) {
+    memset(g_gallery_controls, 0, GALLERY_CONTROL_BYTES);
     FILE *f = fopen("romfs:/gallery/controls_ko.rgb565", "rb");
     if (!f) return;
-
-    static u16 controls[FB_WIDTH * GALLERY_CONTROL_HEIGHT];
-    size_t got = fread(controls, 1, GALLERY_CONTROL_BYTES, f);
+    fread(g_gallery_controls, 1, GALLERY_CONTROL_BYTES, f);
     fclose(f);
-    if (got != GALLERY_CONTROL_BYTES) return;
-
-    memcpy(pagebuf, controls, GALLERY_CONTROL_BYTES);
 }
 
 static bool show_random_gallery(PadState *pad) {
@@ -180,6 +177,8 @@ static bool show_random_gallery(PadState *pad) {
         framebufferClose(&fb);
         return true;
     }
+
+    gallery_load_korean_controls();
 
     int order[GALLERY_PAGE_COUNT];
     gallery_shuffle(order);
@@ -207,16 +206,35 @@ static bool show_random_gallery(PadState *pad) {
 
         if (loaded_pos != pos) {
             if (load_gallery_page(order[pos], pagebuf) != 0) break;
-            gallery_apply_korean_controls(pagebuf);
             loaded_pos = pos;
         }
 
         u32 stride = 0;
         u8 *fbptr = (u8*)framebufferBegin(&fb, &stride);
+
+        // Clear the whole framebuffer to black.
         for (u32 y = 0; y < FB_HEIGHT; ++y) {
-            memcpy(fbptr + y * stride,
-                   (u8*)pagebuf + y * FB_WIDTH * 2,
-                   FB_WIDTH * 2);
+            memset(fbptr + y * stride, 0, FB_WIDTH * 2);
+        }
+
+        // Draw the Korean control strip in its own 54px area.
+        memcpy(fbptr, g_gallery_controls, GALLERY_CONTROL_BYTES);
+
+        // Fit the complete 1280x720 image below the control strip.
+        // 1280x720 -> 1184x666 preserves the 16:9 aspect ratio.
+        const int dst_w = 1184;
+        const int dst_h = 666;
+        const int dst_x = (FB_WIDTH - dst_w) / 2;
+        const int dst_y = GALLERY_CONTROL_HEIGHT;
+
+        for (int y = 0; y < dst_h; ++y) {
+            int sy = (y * FB_HEIGHT) / dst_h;
+            u16 *dstrow = (u16*)(fbptr + (dst_y + y) * stride) + dst_x;
+            const u16 *srcrow = pagebuf + sy * FB_WIDTH;
+            for (int x = 0; x < dst_w; ++x) {
+                int sx = (x * FB_WIDTH) / dst_w;
+                dstrow[x] = srcrow[sx];
+            }
         }
         framebufferEnd(&fb);
     }
