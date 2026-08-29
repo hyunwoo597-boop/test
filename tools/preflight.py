@@ -64,6 +64,29 @@ if not icon.is_file() or icon.stat().st_size < 1024:
     die("assets/icon.jpg missing/invalid")
 print(f"OK custom icon.jpg {icon.stat().st_size} bytes")
 
+# v15 launch gallery
+GALLERY_DIR = ROOT / "romfs" / "gallery"
+gallery_hashes = {
+    "page1.rgb565": "091cd611f5f3dc33ac4ad771a74b183cf683f7bba0ad56f46e9d87e9814315d8",
+    "page2.rgb565": "69ecac12b30fb6702fb97c5bef1232cd9b00b55dbd1c43f646f18f537d5e53eb",
+    "page3.rgb565": "ab46177d33838d102bdfd2ae76c69b0b0965bb72bb0ada5fee9141c751f43bfc",
+    "page4.rgb565": "85326a7f4d00064854a09b873baee531aea3c51ec39f6c6295f18c18acf9d0d1",
+    "page5.rgb565": "c19ca31937746b57019f53aff6b77a51b87823dd53b0c2c14fd91b538af73ffe",
+    "page6.rgb565": "ad2a07728bc9069c9a72b36ef65278221f1ca42b5730eefedc93ab25772dda17",
+    "page7.rgb565": "9014a2a96feee94ffc8ec77c5540fd0ad7063040dc257bf2e429b5f9b1b5f54d",
+    "page8.rgb565": "cbb8b01314cd295f31039b512e7c9716b5c832b3f3790d2b688368a913dcfca6"
+}
+for name, expected_sha in gallery_hashes.items():
+    f = GALLERY_DIR / name
+    if not f.is_file():
+        die(f"missing gallery image: {name}")
+    if f.stat().st_size != 1280 * 720 * 2:
+        die(f"gallery image size mismatch: {name}")
+    got = hashlib.sha256(f.read_bytes()).hexdigest()
+    if got != expected_sha:
+        die(f"gallery image sha256 mismatch: {name}")
+    print(f"OK gallery {name} {got}")
+
 for needed in ["Makefile", "npdm.json", "tools/build_installer_nsp.sh", "tools/merge_nsp.py", "tools/download_update_release.py"]:
     if not (ROOT / needed).is_file():
         die(f"{needed} missing")

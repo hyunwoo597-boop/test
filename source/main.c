@@ -84,6 +84,129 @@ static int verify_one(const PatchFile *pf) {
     return (a >= 0 && b == a) ? 0 : -1;
 }
 
+
+#define FB_WIDTH 1280
+#define FB_HEIGHT 720
+#define GALLERY_PAGE_COUNT 8
+#define GALLERY_FRAME_BYTES (FB_WIDTH * FB_HEIGHT * 2)
+
+static const char *g_gallery_pages[GALLERY_PAGE_COUNT] = {
+    "romfs:/gallery/page1.rgb565",
+    "romfs:/gallery/page2.rgb565",
+    "romfs:/gallery/page3.rgb565",
+    "romfs:/gallery/page4.rgb565",
+    "romfs:/gallery/page5.rgb565",
+    "romfs:/gallery/page6.rgb565",
+    "romfs:/gallery/page7.rgb565",
+    "romfs:/gallery/page8.rgb565"
+};
+
+static u64 gallery_rng_next(u64 *state) {
+    u64 x = *state;
+    if (x == 0) x = 0x9E3779B97F4A7C15ULL;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    *state = x;
+    return x;
+}
+
+static void gallery_shuffle(int order[GALLERY_PAGE_COUNT]) {
+    for (int i = 0; i < GALLERY_PAGE_COUNT; ++i) order[i] = i;
+
+    u64 seed = armGetSystemTick();
+    seed ^= ((u64)(uintptr_t)order << 17);
+    for (int i = GALLERY_PAGE_COUNT - 1; i > 0; --i) {
+        int j = (int)(gallery_rng_next(&seed) % (u64)(i + 1));
+        int t = order[i];
+        order[i] = order[j];
+        order[j] = t;
+    }
+}
+
+static int load_gallery_page(int page_index, void *dst) {
+    if (page_index < 0 || page_index >= GALLERY_PAGE_COUNT || !dst) return -1;
+    FILE *f = fopen(g_gallery_pages[page_index], "rb");
+    if (!f) return -2;
+    size_t got = fread(dst, 1, GALLERY_FRAME_BYTES, f);
+    int err = ferror(f);
+    fclose(f);
+    if (err || got != GALLERY_FRAME_BYTES) return -3;
+    return 0;
+}
+
+/*
+ * Launch gallery.
+ * Images are shuffled once on each launch.
+ * L: previous image (wrap)
+ * R: next image (wrap)
+ * A: continue to installer menu
+ * +: exit application
+ */
+static bool show_random_gallery(PadState *pad) {
+    Framebuffer fb;
+    Result rc = framebufferCreate(&fb, nwindowGetDefault(),
+                                  FB_WIDTH, FB_HEIGHT,
+                                  PIXEL_FORMAT_RGB_565, 2);
+    if (R_FAILED(rc)) return true;
+
+    rc = framebufferMakeLinear(&fb);
+    if (R_FAILED(rc)) {
+        framebufferClose(&fb);
+        return true;
+    }
+
+    u16 *pagebuf = (u16*)malloc(GALLERY_FRAME_BYTES);
+    if (!pagebuf) {
+        framebufferClose(&fb);
+        return true;
+    }
+
+    int order[GALLERY_PAGE_COUNT];
+    gallery_shuffle(order);
+
+    int pos = 0;
+    int loaded_pos = -1;
+    bool continue_to_installer = true;
+
+    while (appletMainLoop()) {
+        padUpdate(pad);
+        u64 down = padGetButtonsDown(pad);
+
+        if (down & HidNpadButton_Plus) {
+            continue_to_installer = false;
+            break;
+        }
+        if (down & HidNpadButton_A) break;
+
+        if (down & HidNpadButton_L) {
+            pos = (pos + GALLERY_PAGE_COUNT - 1) % GALLERY_PAGE_COUNT;
+        }
+        if (down & HidNpadButton_R) {
+            pos = (pos + 1) % GALLERY_PAGE_COUNT;
+        }
+
+        if (loaded_pos != pos) {
+            if (load_gallery_page(order[pos], pagebuf) != 0) break;
+            loaded_pos = pos;
+        }
+
+        u32 stride = 0;
+        u8 *fbptr = (u8*)framebufferBegin(&fb, &stride);
+        for (u32 y = 0; y < FB_HEIGHT; ++y) {
+            memcpy(fbptr + y * stride,
+                   (u8*)pagebuf + y * FB_WIDTH * 2,
+                   FB_WIDTH * 2);
+        }
+        framebufferEnd(&fb);
+    }
+
+    free(pagebuf);
+    framebufferClose(&fb);
+    return continue_to_installer;
+}
+
+
 static void install_patch(void) {
     printf("\n[INSTALL] Korean patch -> Atmosphere LayeredFS\n");
     int failures = 0;
@@ -149,7 +272,15 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printf("RE5 Korean Patch Installer v14\n");
+    if (!show_random_gallery(&pad)) {
+        romfsExit();
+        consoleExit(NULL);
+        return 0;
+    }
+
+    // Restore the text console after the full-screen framebuffer gallery.
+    consoleClear();
+    printf("RE5 Korean Patch Installer v15\n");
     printf("Target: Resident Evil 5 / %s\n\n", TITLE_ID);
     printf("A  Install / overwrite Korean patch\n");
     printf("X  Verify installed files\n");

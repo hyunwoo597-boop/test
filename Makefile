@@ -9,7 +9,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 
 APP_TITLE      := RE5 Korean Patch Installer
 APP_AUTHOR     := RE5 Korean Patch Project
-APP_VERSION    := 14.0.0
+APP_VERSION    := 15.0.0
 APP_TITLEID    := 0100F5A0C0DE0000
 
 TARGET         := re5_korean_patch_installer
