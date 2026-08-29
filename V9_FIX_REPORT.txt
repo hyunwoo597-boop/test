@@ -1,0 +1,7 @@
+duplicate_sd_mount_code_removed: PASS
+manual_sd_unmount_removed: PASS
+romfs_failure_wait_loop_present: PASS
+menu_console_flush_present: PASS
+merge_read_no_alignment: PASS
+merge_write_no_alignment: PASS
+hacbrewpack_invalid_titleid_removed: PASS

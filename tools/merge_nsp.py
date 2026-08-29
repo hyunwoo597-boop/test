@@ -10,7 +10,7 @@ def read_pfs0(path):
     p=Path(path); data=p.read_bytes()
     if data[:4]!=b'PFS0': raise ValueError(f'{p}: not PFS0/NSP')
     n, st_size, _ = struct.unpack_from('<III',data,4)
-    ents=[]; ent_off=0x10; str_off=0x10+n*0x18; data_off=align(str_off+st_size)
+    ents=[]; ent_off=0x10; str_off=0x10+n*0x18; data_off=str_off+st_size
     for i in range(n):
         off,size,nameoff,_=struct.unpack_from('<QQII',data,ent_off+i*0x18)
         end=data.find(b'\0',str_off+nameoff,str_off+st_size)
@@ -22,7 +22,7 @@ def write_pfs0(path, entries):
     names=b''; nameoffs=[]
     for name,_ in entries:
         nameoffs.append(len(names)); names += name.encode()+b'\0'
-    n=len(entries); hdr_size=0x10+n*0x18+len(names); data_off=align(hdr_size)
+    n=len(entries); hdr_size=0x10+n*0x18+len(names); data_off=hdr_size
     offsets=[]; cur=0
     for _,blob in entries:
         offsets.append(cur); cur += len(blob)

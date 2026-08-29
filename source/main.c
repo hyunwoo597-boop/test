@@ -131,23 +131,29 @@ int main(int argc, char **argv) {
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&pad);
 
-    Result rc = fsdevMountSdmc();
+    // libnx already initializes FS and mounts sdmc before main().
+    // Do not mount "sdmc" a second time here.
+    Result rc = romfsInit();
     if (R_FAILED(rc)) {
-        printf("SD mount failed: 0x%08X\nPress + to exit.\n", rc);
-        goto loop_no_romfs;
-    }
-    rc = romfsInit();
-    if (R_FAILED(rc)) {
-        printf("Embedded payload mount failed: 0x%08X\nPress + to exit.\n", rc);
-        goto loop_sd;
+        printf("Embedded payload mount failed: 0x%08X\n", rc);
+        printf("Press + to exit.\n");
+        consoleUpdate(NULL);
+        while (appletMainLoop()) {
+            padUpdate(&pad);
+            if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
+            consoleUpdate(NULL);
+        }
+        consoleExit(NULL);
+        return 1;
     }
 
-    printf("RE5 Korean Patch Installer v5\n");
+    printf("RE5 Korean Patch Installer v9\n");
     printf("Target: Resident Evil 5 / %s\n\n", TITLE_ID);
     printf("A  Install / overwrite Korean patch\n");
     printf("X  Verify installed files\n");
     printf("Y  Remove Korean patch files\n");
     printf("+  Exit\n");
+    consoleUpdate(NULL);
 
     while (appletMainLoop()) {
         padUpdate(&pad);
@@ -160,9 +166,6 @@ int main(int argc, char **argv) {
     }
 
     romfsExit();
-loop_sd:
-    fsdevUnmountDevice("sdmc");
-loop_no_romfs:
     consoleExit(NULL);
     return 0;
 }
