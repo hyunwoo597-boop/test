@@ -1,0 +1,92 @@
+name: Build RE5 All-In-One NSP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight repository files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/preflight.py
+          test -f source/main.c
+          grep -nE '\bint[[:space:]]+main[[:space:]]*\(' source/main.c
+
+      - name: Download RE5 update NSP from latest GitHub Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 tools/download_update_release.py
+          python3 tools/preflight.py --require-update
+
+      - name: Restore prod.keys from repository secret
+        shell: bash
+        env:
+          PROD_KEYS_B64: ${{ secrets.PROD_KEYS_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$PROD_KEYS_B64" || { echo 'Missing secret PROD_KEYS_B64'; exit 2; }
+          printf '%s' "$PROD_KEYS_B64" | base64 -d > /tmp/prod.keys
+          test -s /tmp/prod.keys
+          chmod 600 /tmp/prod.keys
+
+      - name: Build installer application NSP
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROD_KEYS=/tmp/prod.keys bash ./tools/build_installer_nsp.sh
+
+      - name: Verify installer NSP
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s RE5_Korean_Patch_Installer.nsp
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("RE5_Korean_Patch_Installer.nsp")
+          assert p.read_bytes()[:4] == b"PFS0", "installer NSP is not PFS0"
+          print("Installer NSP PFS0 OK:", p.stat().st_size)
+          PY
+
+      - name: Merge update + installer into one multi-title NSP
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/merge_nsp.py \
+            input/RE5_Update_1.11.nsp \
+            RE5_Korean_Patch_Installer.nsp \
+            RE5_Update_1.11_KoreanPatch_AllInOne.nsp
+          test -s RE5_Update_1.11_KoreanPatch_AllInOne.nsp
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("RE5_Update_1.11_KoreanPatch_AllInOne.nsp")
+          assert p.read_bytes()[:4] == b"PFS0", "merged NSP is not PFS0"
+          print("Merged NSP PFS0 OK:", p.stat().st_size)
+          PY
+          sha256sum \
+            RE5_Korean_Patch_Installer.nsp \
+            RE5_Update_1.11_KoreanPatch_AllInOne.nsp \
+            > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: RE5-Update-1.11-KoreanPatch-AllInOne-FINAL
+          if-no-files-found: error
+          path: |
+            RE5_Korean_Patch_Installer.nsp
+            RE5_Update_1.11_KoreanPatch_AllInOne.nsp
+            SHA256SUMS.txt
