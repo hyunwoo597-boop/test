@@ -1,4 +1,4 @@
-name: Build RE5 Korean Patch Installer v12
+name: Build RE5 Korean Patch Installer v12.1
 on:
   workflow_dispatch:
 
@@ -26,7 +26,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --break-system-packages cryptography
           TITLEID="$(python3 tools/extract_base_titleid.py base_RE5_Korean_Patch_Installer.nsp /tmp/prod.keys)"
           echo "TITLEID=$TITLEID" >> "$GITHUB_ENV"
           python3 - "$TITLEID" <<'PY'
@@ -65,20 +64,20 @@ jobs:
           ./hacBrewPack-src/hacbrewpack --keyset /tmp/prod.keys --exefsdir exefs --romfsdir romfs --controldir control --nologo
           NSP="$(find hacbrewpack_nsp -type f -name '*.nsp' | head -1)"
           test -n "$NSP"
-          cp "$NSP" RE5_Korean_Patch_Installer_v12.nsp
+          cp "$NSP" RE5_Korean_Patch_Installer_v12_1.nsp
 
       - name: Verify actual built NSP includes manual image payload
-        run: python3 tools/verify_nsp.py RE5_Korean_Patch_Installer_v12.nsp
+        run: python3 tools/verify_nsp.py RE5_Korean_Patch_Installer_v12_1.nsp
 
       - name: Output hashes
         shell: bash
         run: |
-          sha256sum RE5_Korean_Patch_Installer_v12.nsp > SHA256SUMS.txt
+          sha256sum RE5_Korean_Patch_Installer_v12_1.nsp > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RE5_Korean_Patch_Installer_v12_VERIFIED
+          name: RE5_Korean_Patch_Installer_v12_1_VERIFIED
           path: |
-            RE5_Korean_Patch_Installer_v12.nsp
+            RE5_Korean_Patch_Installer_v12_1.nsp
             SHA256SUMS.txt
