@@ -1,0 +1,84 @@
+name: Build RE5 Korean Patch Installer v12
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore prod.keys safely
+        shell: bash
+        env:
+          PROD_KEYS_B64: ${{ secrets.PROD_KEYS_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$PROD_KEYS_B64"
+          printf '%s' "$PROD_KEYS_B64" | base64 -d > /tmp/prod.keys
+          chmod 600 /tmp/prod.keys
+
+      - name: Static preflight - photos and Korean patch must be present
+        run: python3 tools/preflight.py
+
+      - name: Derive the exact existing Installer Title ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --break-system-packages cryptography
+          TITLEID="$(python3 tools/extract_base_titleid.py base_RE5_Korean_Patch_Installer.nsp /tmp/prod.keys)"
+          echo "TITLEID=$TITLEID" >> "$GITHUB_ENV"
+          python3 - "$TITLEID" <<'PY'
+          import json,sys
+          p='npdm.json'; tid='0x'+sys.argv[1]
+          j=json.load(open(p)); j['title_id']=tid; j['title_id_range_min']=tid; j['title_id_range_max']=tid
+          json.dump(j,open(p,'w'),indent=2)
+          PY
+          echo "Using existing Installer Title ID: $TITLEID"
+
+      - name: Build application ELF/NSO/NPDM/NACP
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -j2
+          mkdir -p exefs
+          elf2nso RE5_Korean_Patch_Installer.elf exefs/main
+          npdmtool npdm.json exefs/main.npdm
+          nacptool --create "RE5 Korean Patch Installer" "RE5 Korean Patch Project" "12.0.0" control/control.nacp --titleid="$TITLEID"
+          test -s exefs/main
+          test -s exefs/main.npdm
+          test -s control/control.nacp
+
+      - name: Build hacBrewPack
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/pplatoon/hacBrewPack.git hacBrewPack-src
+          make -C hacBrewPack-src -j2
+
+      - name: Pack NSP
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf hacbrewpack_nca hacbrewpack_nsp hacbrewpack_temp
+          ./hacBrewPack-src/hacbrewpack --keyset /tmp/prod.keys --exefsdir exefs --romfsdir romfs --controldir control --nologo
+          NSP="$(find hacbrewpack_nsp -type f -name '*.nsp' | head -1)"
+          test -n "$NSP"
+          cp "$NSP" RE5_Korean_Patch_Installer_v12.nsp
+
+      - name: Verify actual built NSP includes manual image payload
+        run: python3 tools/verify_nsp.py RE5_Korean_Patch_Installer_v12.nsp
+
+      - name: Output hashes
+        shell: bash
+        run: |
+          sha256sum RE5_Korean_Patch_Installer_v12.nsp > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RE5_Korean_Patch_Installer_v12_VERIFIED
+          path: |
+            RE5_Korean_Patch_Installer_v12.nsp
+            SHA256SUMS.txt
