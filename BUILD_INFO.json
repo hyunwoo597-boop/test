@@ -37,8 +37,8 @@
   },
   "icon_source": "user_selected_mod_app_icon_2026-09-05",
   "icon_strategy": "direct_square_resize_to_256x256_jpeg",
-  "project_version": "17.2.0",
-  "build_state": "FINAL_BUILD_READY_V17_2_THREE_CHARACTERS_DELTA",
+  "project_version": "17.4.0",
+  "build_state": "FINAL_BUILD_READY_V17_4_REBECCA_ART_UPDATED",
   "installer_title_id": "0100F5A0C0DE0000",
   "icon_sha256": "2b54394a13e12caeef8649a41cc92a1739857a30a4a133f27d047b103eb64aff",
   "finalized_date": "2026-09-05",
@@ -48,7 +48,9 @@
   "release_assets_required": [
     "RE5_v17_FULL_ROMFS.zip",
     "RE5_v17_ROMFS_PATCH_17_1.zip",
-    "RE5_v17_ROMFS_PATCH_17_2.zip"
+    "RE5_v17_ROMFS_PATCH_17_2.zip",
+    "RE5_v17_ROMFS_PATCH_17_3.zip",
+    "RE5_v17_ROMFS_PATCH_17_4.zip"
   ],
   "release_romfs_sha256": "3871f2c56d5b9473f4404a7cb4aef7c1766a864a641f81f9b5e8b600efee7e31",
   "gallery_removed": true,
@@ -59,7 +61,7 @@
   "bgm": "iron_and_bone; 48kHz stereo s16le PCM; loop; -8dB",
   "release_romfs_size_bytes": 87743261,
   "release_romfs_patch_sha256": "2c8d640c9c926f13b09c91701d5684898a2929b120016e2addc0e5cedb4beeeb",
-  "release_strategy": "keep existing full ROMFS and 17.1 patch; upload 17.2 changed-files overlay only; downloader removes stale Sheva/Jill2 files",
+  "release_strategy": "keep existing full ROMFS + 17.1 + 17.2 + 17.3; upload 17.4 Rebecca UI overlay only",
   "character_display_names": [
     "엑셀라",
     "레베카",
@@ -68,5 +70,14 @@
   "default_sheva_selector_removed": true,
   "jill_cos2_removed": true,
   "jill_cos1_display_name": "질",
-  "release_romfs_patch_17_2_sha256": "8967cac1700495ad270ceea6eae895e3c45caae9e98e1ca05a83c05f7c01275d"
+  "release_romfs_patch_17_2_sha256": "8967cac1700495ad270ceea6eae895e3c45caae9e98e1ca05a83c05f7c01275d",
+  "ui_text_corrections": {
+    "character_help": "엑셀라, 레베카, 질 중 원하는 캐릭터를 선택합니다.",
+    "supported_characters": "엑셀라 · 레베카 · 질",
+    "removed_footer_hint": "Y 옵션",
+    "status_info_background": "current 3-character selector"
+  },
+  "release_patch_17_3_sha256": "2a76809c6034754dd7a8817103351f58bcf3b142fbc499623d1cdab5326ec6c8",
+  "release_patch_17_4_sha256": "988e5eff942f9383ab8e32a099a0d6a71e33baedc92ecb1a60b0d00082c41827",
+  "rebecca_selector_art": "user_upload_2026-09-05_reference_poster"
 }

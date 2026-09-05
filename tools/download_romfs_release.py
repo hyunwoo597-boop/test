@@ -15,6 +15,10 @@ PATCH_ASSET_NAME = "RE5_v17_ROMFS_PATCH_17_1.zip"
 PATCH_EXPECTED_SHA256 = "2c8d640c9c926f13b09c91701d5684898a2929b120016e2addc0e5cedb4beeeb"
 PATCH2_ASSET_NAME = "RE5_v17_ROMFS_PATCH_17_2.zip"
 PATCH2_EXPECTED_SHA256 = "8967cac1700495ad270ceea6eae895e3c45caae9e98e1ca05a83c05f7c01275d"
+PATCH3_ASSET_NAME = "RE5_v17_ROMFS_PATCH_17_3.zip"
+PATCH3_EXPECTED_SHA256 = "2a76809c6034754dd7a8817103351f58bcf3b142fbc499623d1cdab5326ec6c8"
+PATCH4_ASSET_NAME = "RE5_v17_ROMFS_PATCH_17_4.zip"
+PATCH4_EXPECTED_SHA256 = "988e5eff942f9383ab8e32a099a0d6a71e33baedc92ecb1a60b0d00082c41827"
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "input"
 
@@ -112,6 +116,8 @@ try:
     base_path = INPUT / BASE_ASSET_NAME
     patch_path = INPUT / PATCH_ASSET_NAME
     patch2_path = INPUT / PATCH2_ASSET_NAME
+    patch3_path = INPUT / PATCH3_ASSET_NAME
+    patch4_path = INPUT / PATCH4_ASSET_NAME
 
     print("Downloading base ROMFS:", BASE_ASSET_NAME)
     download(get_asset(release, BASE_ASSET_NAME), base_path)
@@ -131,12 +137,28 @@ try:
         raise RuntimeError(f"ROMFS patch 17.2 ZIP unexpectedly small: {patch2_path.stat().st_size} bytes")
     verify_sha(patch2_path, PATCH2_EXPECTED_SHA256, "ROMFS patch 17.2")
 
+    print("Downloading ROMFS overlay patch:", PATCH3_ASSET_NAME)
+    download(get_asset(release, PATCH3_ASSET_NAME), patch3_path)
+    if patch3_path.stat().st_size < 100_000:
+        raise RuntimeError(f"ROMFS patch 17.3 ZIP unexpectedly small: {patch3_path.stat().st_size} bytes")
+    verify_sha(patch3_path, PATCH3_EXPECTED_SHA256, "ROMFS patch 17.3")
+
+    print("Downloading ROMFS overlay patch:", PATCH4_ASSET_NAME)
+    download(get_asset(release, PATCH4_ASSET_NAME), patch4_path)
+    if patch4_path.stat().st_size < 10_000:
+        raise RuntimeError(f"ROMFS patch 17.4 ZIP unexpectedly small: {patch4_path.stat().st_size} bytes")
+    verify_sha(patch4_path, PATCH4_EXPECTED_SHA256, "ROMFS patch 17.4")
+
     print("Extracting base romfs/ ...")
     extract_base(base_path)
     print("Overlaying v17.1 changed ROMFS files ...")
     overlay_patch(patch_path)
     print("Overlaying v17.2 character-list UI files ...")
     overlay_patch(patch2_path)
+    print("Overlaying v17.3 corrected UI text/status files ...")
+    overlay_patch(patch3_path)
+    print("Overlaying v17.4 Rebecca portrait UI files ...")
+    overlay_patch(patch4_path)
 
     # v17.2 removes default Sheva from the character selector and removes Jill costume 2.
     stale_paths = [
@@ -156,8 +178,8 @@ try:
             raise RuntimeError(f"final ROMFS incomplete: {needed} missing")
 
     print(
-        f"OK: base + v17.1 patch + v17.2 patch ready "
-        f"({base_path.stat().st_size:,} + {patch_path.stat().st_size:,} + {patch2_path.stat().st_size:,} bytes downloaded)"
+        f"OK: base + v17.1 patch + v17.2 patch + v17.3 patch + v17.4 patch ready "
+        f"({base_path.stat().st_size:,} + {patch_path.stat().st_size:,} + {patch2_path.stat().st_size:,} + {patch3_path.stat().st_size:,} + {patch4_path.stat().st_size:,} bytes downloaded)"
     )
 except Exception as e:
     print("ERROR:", e, file=sys.stderr)
