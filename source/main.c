@@ -14,6 +14,18 @@
 #define FB_HEIGHT 720
 #define FRAME_BYTES (FB_WIDTH * FB_HEIGHT * 2)
 
+#define BGM_PATH "romfs:/audio/iron_and_bone.pcm"
+#define BGM_BUFFER_COUNT 4
+#define BGM_BUFFER_SIZE 0x40000
+
+static FILE *g_bgm_file = NULL;
+static bool g_bgm_ready = false;
+static int g_bgm_refill_index = 0;
+static AudioOutBuffer g_bgm_out[BGM_BUFFER_COUNT];
+static u8 g_bgm_pcm[BGM_BUFFER_COUNT][BGM_BUFFER_SIZE] __attribute__((aligned(0x1000)));
+
+static void bgm_pump(void);
+
 typedef struct {
     const char *name;
     const char *src;
@@ -60,6 +72,110 @@ static const char *g_char_screens[5] = {
     "romfs:/ui/char_4.rgb565",
 };
 
+static bool bgm_fill_buffer(int index) {
+    if (!g_bgm_file || index < 0 || index >= BGM_BUFFER_COUNT) return false;
+
+    size_t filled = 0;
+    while (filled < BGM_BUFFER_SIZE) {
+        size_t n = fread(g_bgm_pcm[index] + filled, 1, BGM_BUFFER_SIZE - filled, g_bgm_file);
+        filled += n;
+
+        if (filled == BGM_BUFFER_SIZE) break;
+        if (ferror(g_bgm_file)) {
+            clearerr(g_bgm_file);
+            memset(g_bgm_pcm[index] + filled, 0, BGM_BUFFER_SIZE - filled);
+            break;
+        }
+
+        if (feof(g_bgm_file)) {
+            clearerr(g_bgm_file);
+            if (fseek(g_bgm_file, 0, SEEK_SET) != 0) {
+                memset(g_bgm_pcm[index] + filled, 0, BGM_BUFFER_SIZE - filled);
+                break;
+            }
+        }
+    }
+
+    armDCacheFlush(g_bgm_pcm[index], BGM_BUFFER_SIZE);
+    return true;
+}
+
+static bool bgm_init(void) {
+    Result rc = audoutInitialize();
+    if (R_FAILED(rc)) return false;
+
+    g_bgm_file = fopen(BGM_PATH, "rb");
+    if (!g_bgm_file) {
+        audoutExit();
+        return false;
+    }
+
+    memset(g_bgm_out, 0, sizeof(g_bgm_out));
+    for (int i = 0; i < BGM_BUFFER_COUNT; ++i) {
+        g_bgm_out[i].next = NULL;
+        g_bgm_out[i].buffer = g_bgm_pcm[i];
+        g_bgm_out[i].buffer_size = BGM_BUFFER_SIZE;
+        g_bgm_out[i].data_size = BGM_BUFFER_SIZE;
+        g_bgm_out[i].data_offset = 0;
+        if (!bgm_fill_buffer(i)) goto fail;
+    }
+
+    rc = audoutStartAudioOut();
+    if (R_FAILED(rc)) goto fail;
+
+    for (int i = 0; i < BGM_BUFFER_COUNT; ++i) {
+        rc = audoutAppendAudioOutBuffer(&g_bgm_out[i]);
+        if (R_FAILED(rc)) {
+            audoutStopAudioOut();
+            goto fail;
+        }
+    }
+
+    g_bgm_refill_index = 0;
+    g_bgm_ready = true;
+    return true;
+
+fail:
+    fclose(g_bgm_file);
+    g_bgm_file = NULL;
+    audoutExit();
+    return false;
+}
+
+static void bgm_pump(void) {
+    if (!g_bgm_ready) return;
+
+    AudioOutBuffer *released = NULL;
+    u32 released_count = 0;
+    Result rc = audoutGetReleasedAudioOutBuffer(&released, &released_count);
+    (void)released;
+    if (R_FAILED(rc) || released_count == 0) return;
+
+    for (u32 i = 0; i < released_count; ++i) {
+        int index = g_bgm_refill_index;
+        bgm_fill_buffer(index);
+        if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&g_bgm_out[index]))) {
+            g_bgm_refill_index = (g_bgm_refill_index + 1) % BGM_BUFFER_COUNT;
+        }
+    }
+}
+
+static void bgm_shutdown(void) {
+    if (!g_bgm_ready) return;
+
+    g_bgm_ready = false;
+    audoutStopAudioOut();
+    bool flushed = false;
+    audoutFlushAudioOutBuffers(&flushed);
+    (void)flushed;
+
+    if (g_bgm_file) {
+        fclose(g_bgm_file);
+        g_bgm_file = NULL;
+    }
+    audoutExit();
+}
+
 static int mkdir_p(const char *path) {
     char tmp[768];
     size_t len = strlen(path);
@@ -101,6 +217,7 @@ static int copy_file(const char *src, const char *dst) {
     for (;;) {
         size_t n = fread(buf, 1, sizeof(buf), in);
         if (n > 0 && fwrite(buf, 1, n, out) != n) { rc = -13; break; }
+        bgm_pump();
         if (n < sizeof(buf)) {
             if (ferror(in)) rc = -14;
             break;
@@ -206,6 +323,7 @@ static void show_status_screen(Framebuffer *fb, PadState *pad, u16 *screenbuf, b
     if (load_frame(path, screenbuf) == 0) present_fullscreen(fb, screenbuf);
 
     while (appletMainLoop()) {
+        bgm_pump();
         padUpdate(pad);
         u64 down = padGetButtonsDown(pad);
         if (down & (HidNpadButton_A | HidNpadButton_B | HidNpadButton_Plus)) break;
@@ -215,6 +333,7 @@ static void show_status_screen(Framebuffer *fb, PadState *pad, u16 *screenbuf, b
 static void show_info_screen(Framebuffer *fb, PadState *pad, u16 *screenbuf) {
     if (load_frame("romfs:/ui/info.rgb565", screenbuf) == 0) present_fullscreen(fb, screenbuf);
     while (appletMainLoop()) {
+        bgm_pump();
         padUpdate(pad);
         u64 down = padGetButtonsDown(pad);
         if (down & (HidNpadButton_B | HidNpadButton_A | HidNpadButton_Plus)) break;
@@ -239,6 +358,7 @@ static void show_installer_ui(PadState *pad) {
     bool quit = false;
 
     while (appletMainLoop() && !quit) {
+        bgm_pump();
         padUpdate(pad);
         u64 down = padGetButtonsDown(pad);
 
@@ -372,8 +492,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    bgm_init();
+
     consoleExit(NULL);
     show_installer_ui(&pad);
+    bgm_shutdown();
     romfsExit();
     return 0;
 }

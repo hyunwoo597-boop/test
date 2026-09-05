@@ -38,21 +38,28 @@
       "sha256": "e71bce8723edb5b6db4edc0aca2f5a6e6d83e151f84dc80f1866102c53e0ab48"
     }
   },
-  "icon_source": "user_provided_4panel_biohazard5_art",
-  "icon_strategy": "fit_full_image_into_256x256_with_black_padding",
-  "project_version": "17.0.0",
-  "build_state": "FINAL_BUILD_READY_NO_GALLERY_SEPARATE_UNLOCK",
+  "icon_source": "user_selected_mod_app_icon_2026-09-05",
+  "icon_strategy": "direct_square_resize_to_256x256_jpeg",
+  "project_version": "17.1.0",
+  "build_state": "FINAL_BUILD_READY_CREATOR_ICON_BGM_DELTA_ROMFS",
   "installer_title_id": "0100F5A0C0DE0000",
-  "icon_sha256": "3dc4158938357a8559841b79e0b3631621fb24183d4b3ad41a0d2e87c2003b3c",
+  "icon_sha256": "2b54394a13e12caeef8649a41cc92a1739857a30a4a133f27d047b103eb64aff",
   "finalized_date": "2026-09-05",
   "package_mode": "KOREAN_PATCH_PLUS_MOD_INSTALLER_ONLY",
   "base_update_nsp_integration": false,
   "output_nsp": "RE5_Korean_Mod_Installer.nsp",
   "release_assets_required": [
-    "RE5_v17_FULL_ROMFS.zip"
+    "RE5_v17_FULL_ROMFS.zip",
+    "RE5_v17_ROMFS_PATCH_17_1.zip"
   ],
   "release_romfs_sha256": "3871f2c56d5b9473f4404a7cb4aef7c1766a864a641f81f9b5e8b600efee7e31",
   "gallery_removed": true,
   "gallery_feature": false,
-  "coexistence_note": "character mod and unlock both replace exefs/main; without combined payload only the last installed action remains active"
+  "coexistence_note": "character mod and unlock both replace exefs/main; without combined payload only the last installed action remains active",
+  "creator_credit": "디시인사이드 스위치CFW 갤러리 : 루카",
+  "creator_credit_screen": "romfs/ui/info.rgb565",
+  "bgm": "iron_and_bone; 48kHz stereo s16le PCM; loop; -8dB",
+  "release_romfs_size_bytes": 87743261,
+  "release_romfs_patch_sha256": "2c8d640c9c926f13b09c91701d5684898a2929b120016e2addc0e5cedb4beeeb",
+  "release_strategy": "keep existing full ROMFS; upload changed-files overlay patch only"
 }

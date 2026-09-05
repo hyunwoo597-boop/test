@@ -9,7 +9,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 
 APP_TITLE      := RE5 Korean + Character Mod Installer
 APP_AUTHOR     := RE5 Mod Installer Project
-APP_VERSION    := 17.0.0
+APP_VERSION    := 17.1.0
 APP_TITLEID    := 0100F5A0C0DE0000
 
 TARGET         := re5_mod_installer

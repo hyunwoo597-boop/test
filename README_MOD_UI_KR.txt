@@ -64,3 +64,21 @@ RE5 한글패치 + 캐릭터 모드 설치 프로그램
 [필요 환경]
 - devkitPro/devkitA64 + libnx
 - prod.keys (GitHub Secret PROD_KEYS_B64)
+
+제작자 : 디시인사이드 스위치CFW 갤러리 : 루카
+
+[배경음악]
+- iron_and_bone.mp3를 설치기 전용 BGM으로 추가.
+- 실행 중 자동 재생되며 곡 끝에서 처음으로 반복 재생.
+- Switch audout 규격에 맞춰 48kHz / 스테레오 / 16-bit PCM으로 변환.
+- UI 조작과 파일 설치 중에도 재생이 이어지도록 링 버퍼 방식 사용.
+- 배경음악 용도로 원본 대비 -8 dB 감쇠 적용.
+
+[앱 아이콘]
+- 사용자 지정 BIOHAZARD 5 '모드 앱' 아이콘으로 변경.
+
+[17.1 변경분 업로드 방식]
+- 기존 Release의 RE5_v17_FULL_ROMFS.zip은 그대로 유지.
+- 새로 RE5_v17_ROMFS_PATCH_17_1.zip만 같은 최신 Release에 추가.
+- 패치 ZIP에는 변경된 ROMFS 파일만 포함: 제작자 문구 UI + BGM.
+- Actions는 기존 FULL ROMFS를 푼 뒤 PATCH를 덮어써서 최종 ROMFS를 구성.
