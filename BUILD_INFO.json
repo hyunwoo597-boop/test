@@ -1,0 +1,51 @@
+{
+  "characters": [
+    "none",
+    "excella",
+    "rebecca",
+    "jill_cos1",
+    "jill_cos2"
+  ],
+  "unlock_toggle": true,
+  "jill_cos3_removed": true,
+  "jill_cos4_removed": true,
+  "payload_hashes": {
+    "excella_plain": "d9f932ae4012f73c15fbdc056dbaa387bb035147123a0f5efc4260444bcc9eba",
+    "excella_unlock": "0c69edacc29df6e4c9a3291ecd345dd366f73f8fd05c9f5e6e133741138cd06f",
+    "rebecca_plain": "c462b70cd0c6d81e3cce5833cd982cf296230a3d5b37be554a3f90d47c1cbfc0",
+    "rebecca_unlock": "48a239341153a12c6501d6724e843bb8c0fcf03e16d188b3e8d7b3b50ba79238",
+    "jill_cos1_plain": "51b1bb20acda2c5b555865988b700d7e9ef80bd2d9ea639c5498b3998756c5d8",
+    "jill_cos1_unlock": "31102701b853dc989cb889c96f6dfc9a1902e9b52172fd4e541ceb6114edcf6f",
+    "jill_cos2_plain": "237a78d232abafcb7b92acb82cef0d9477c79225067f1f200719b9efa0dbab0a",
+    "jill_cos2_unlock": "bc8a7ae48f21d97d882c63f433f3d735d3e0791afc17da2857dd0456f6f1ca9f",
+    "unlock_only": "9129c6e133a02b47455ca50736b0cd1dea59904243f2590323aac45ff1d92d0d"
+  },
+  "ui": "preview-style 1280x720 RGB565",
+  "korean_patch": "latest user upload 2026-09-05",
+  "korean_patch_files": {
+    "CoreResource.arc": {
+      "size": 15962535,
+      "sha256": "3013c9762a5f87e3782ef4a1fff08d49d9947939dcdcb27dedd08d3cdd92dc1c"
+    },
+    "GuiTextResource.arc": {
+      "size": 115004,
+      "sha256": "7decf69ef9198a9112cf0d91d4a762861ead28e642287bb298c160a8167a9671"
+    },
+    "Msg2Resource_e.arc": {
+      "size": 145129,
+      "sha256": "d83c54e72129c568431966a27d48d0f1fd76096ab26b4040a9517cf8400fa0ed"
+    },
+    "NXStrapResource.arc": {
+      "size": 876383,
+      "sha256": "e71bce8723edb5b6db4edc0aca2f5a6e6d83e151f84dc80f1866102c53e0ab48"
+    }
+  },
+  "icon_updated_at_utc": "2026-09-05T05:00:00Z",
+  "icon_source": "user_provided_4panel_biohazard5_art",
+  "icon_strategy": "fit_full_image_into_256x256_with_black_padding",
+  "project_version": "17.0.0",
+  "build_state": "FINAL_BUILD_READY",
+  "installer_title_id": "0100F5A0C0DE0000",
+  "icon_sha256": "3dc4158938357a8559841b79e0b3631621fb24183d4b3ad41a0d2e87c2003b3c",
+  "finalized_date": "2026-09-05"
+}
