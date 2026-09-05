@@ -46,10 +46,9 @@ static const PatchFile g_files[] = {
 };
 
 static const CharacterMod g_mods[] = {
-    {"엑셀라",       "romfs:/payload/mods/excella/main"},
-    {"레베카",       "romfs:/payload/mods/rebecca/main"},
-    {"질 코스튬 1",  "romfs:/payload/mods/jill_cos1/main"},
-    {"질 코스튬 2",  "romfs:/payload/mods/jill_cos2/main"},
+    {"엑셀라", "romfs:/payload/mods/excella/main"},
+    {"레베카", "romfs:/payload/mods/rebecca/main"},
+    {"질",     "romfs:/payload/mods/jill_cos1/main"},
 };
 
 static const char *g_unlock_only = "romfs:/payload/unlock/main";
@@ -64,12 +63,10 @@ static const char *g_main_screens[7] = {
     "romfs:/ui/main_6.rgb565",
 };
 
-static const char *g_char_screens[5] = {
-    "romfs:/ui/char_0.rgb565",
-    "romfs:/ui/char_1.rgb565",
-    "romfs:/ui/char_2.rgb565",
-    "romfs:/ui/char_3.rgb565",
-    "romfs:/ui/char_4.rgb565",
+static const char *g_char_screens[3] = {
+    "romfs:/ui/char_1.rgb565", // 엑셀라
+    "romfs:/ui/char_2.rgb565", // 레베카
+    "romfs:/ui/char_3.rgb565", // 질
 };
 
 static bool bgm_fill_buffer(int index) {
@@ -264,25 +261,15 @@ static bool remove_patch_action(void) {
 }
 
 static bool install_character(int index) {
-    // 0 = 기본 셰바. exefs/main을 지워 캐릭터 모드를 해제한다.
-    if (index == 0) {
-        if (remove(MOD_TARGET) == 0) return true;
-        return errno == ENOENT;
-    }
-
-    int mod_index = index - 1;
-    if (mod_index < 0 || mod_index >= (int)(sizeof(g_mods)/sizeof(g_mods[0]))) return false;
-    const char *src = g_mods[mod_index].src;
+    if (index < 0 || index >= (int)(sizeof(g_mods)/sizeof(g_mods[0]))) return false;
+    const char *src = g_mods[index].src;
     if (copy_file(src, MOD_TARGET) != 0) return false;
     return same_size(src, MOD_TARGET);
 }
 
 static bool verify_character(int index) {
-    if (index == 0) return file_size(MOD_TARGET) < 0;
-
-    int mod_index = index - 1;
-    if (mod_index < 0 || mod_index >= (int)(sizeof(g_mods)/sizeof(g_mods[0]))) return false;
-    return same_size(g_mods[mod_index].src, MOD_TARGET);
+    if (index < 0 || index >= (int)(sizeof(g_mods)/sizeof(g_mods[0]))) return false;
+    return same_size(g_mods[index].src, MOD_TARGET);
 }
 
 static bool install_unlock_only(void) {
@@ -353,7 +340,7 @@ static void show_installer_ui(PadState *pad) {
 
     enum { MODE_MAIN, MODE_CHARACTER } mode = MODE_MAIN;
     int main_sel = 1;
-    int char_sel = 0; // 0=기본 셰바, 1=엑셀라, 2=레베카, 3=질1, 4=질2
+    int char_sel = 0; // 0=엑셀라, 1=레베카, 2=질
     bool dirty = true;
     bool quit = false;
 
@@ -432,12 +419,12 @@ static void show_installer_ui(PadState *pad) {
             }
 
             if (down & HidNpadButton_Up) {
-                char_sel = (char_sel + 4) % 5;
+                char_sel = (char_sel + 2) % 3;
                 dirty = true;
             }
 
             if (down & HidNpadButton_Down) {
-                char_sel = (char_sel + 1) % 5;
+                char_sel = (char_sel + 1) % 3;
                 dirty = true;
             }
 

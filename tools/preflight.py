@@ -26,7 +26,13 @@ if not re.search(r"\bint\s+main\s*\(", text):
 for forbidden in ["mods_unlock", "unlock_enabled", "HidNpadButton_Y", "char_0_off", "char_0_on"]:
     if forbidden in text:
         die(f"obsolete combined/toggle logic still present in source: {forbidden}")
-print("OK source/main.c: character mods and unlock are separate menu actions")
+for forbidden_name in ["기본 셰바", "질 코스튬 1", "질 코스튬 2", "jill_cos2/main"]:
+    if forbidden_name in text:
+        die(f"removed/renamed character still present in source: {forbidden_name}")
+for required_name in ["엑셀라", "레베카", "질"]:
+    if required_name not in text:
+        die(f"required character missing from source: {required_name}")
+print("OK source/main.c: character selector is Excella / Rebecca / Jill only")
 for required in ["BGM_PATH", "bgm_init", "bgm_pump", "bgm_shutdown", "audoutInitialize", "audoutAppendAudioOutBuffer"]:
     if required not in text:
         die(f"BGM playback logic missing from source: {required}")
@@ -67,7 +73,7 @@ for needed in ["Makefile", "npdm.json", "tools/build_installer_nsp.sh", "tools/d
 UI_DIR = ROOT / "romfs" / "ui"
 ui_names = [
     *[f"main_{i}.rgb565" for i in range(7)],
-    *[f"char_{i}.rgb565" for i in range(5)],
+    *[f"char_{i}.rgb565" for i in (1, 2, 3)],
     "status_ok.rgb565", "status_fail.rgb565", "info.rgb565"
 ]
 for name in ui_names:
@@ -79,7 +85,10 @@ for name in ui_names:
 for obsolete in ["main_2_off.rgb565", "main_2_on.rgb565", *[f"char_{i}_{s}.rgb565" for i in range(5) for s in ("off", "on")]]:
     if (UI_DIR / obsolete).exists():
         die(f"obsolete unlock-toggle UI unexpectedly present: {obsolete}")
-print("OK separate-action RGB565 UI screens")
+for removed_ui in ["char_0.rgb565", "char_4.rgb565"]:
+    if (UI_DIR / removed_ui).exists():
+        die(f"removed character UI unexpectedly present: {removed_ui}")
+print("OK character UI contains only Excella / Rebecca / Jill")
 
 BGM = ROOT / "romfs" / "audio" / "iron_and_bone.pcm"
 if not BGM.is_file():
@@ -92,7 +101,7 @@ if bgm_sha != "6907465f3aeb13c14c6982441e93ccc0e8e7f36b78257d9c7f2904c0297bf030"
 print(f"OK looping BGM 48kHz stereo s16le {BGM.stat().st_size} bytes {bgm_sha}")
 
 MOD_DIR = ROOT / "romfs" / "payload" / "mods"
-for slug in ["excella", "rebecca", "jill_cos1", "jill_cos2"]:
+for slug in ["excella", "rebecca", "jill_cos1"]:
     f = MOD_DIR / slug / "main"
     if not f.is_file() or f.stat().st_size < 8_000_000:
         die(f"missing/invalid character mod payload: mods/{slug}/main")
@@ -107,7 +116,7 @@ if not unlock.is_file() or unlock.stat().st_size < 8_000_000:
     die("missing/invalid unlock-only main")
 print(f"OK separate unlock-only main {unlock.stat().st_size} bytes")
 
-for removed in ["jill_cos3", "jill_cos4"]:
+for removed in ["jill_cos2", "jill_cos3", "jill_cos4"]:
     if (MOD_DIR / removed).exists():
         die(f"removed mod unexpectedly present: {removed}")
 
@@ -115,4 +124,4 @@ if (ROOT / "romfs" / "gallery").exists():
     die("gallery directory should be removed")
 print("OK gallery removed")
 print("OK update NSP integration disabled: Korean patch + mod installer only")
-print("PREFLIGHT OK v17.1 SEPARATE CHARACTER / UNLOCK + LOOPING BGM")
+print("PREFLIGHT OK v17.2 EXCELLA / REBECCA / JILL + SEPARATE UNLOCK + LOOPING BGM")

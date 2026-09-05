@@ -40,7 +40,7 @@ echo "=== create NACP/control ==="
 nacptool --create \
   "RE5 Korean + Character Mod Installer" \
   "RE5 Mod Installer Project" \
-  "17.0.0" \
+  "17.2.0" \
   "${TARGET}.nacp" \
   --titleid="$TITLEID"
 

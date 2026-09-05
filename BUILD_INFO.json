@@ -1,10 +1,8 @@
 {
   "characters": [
-    "none",
     "excella",
     "rebecca",
-    "jill_cos1",
-    "jill_cos2"
+    "jill"
   ],
   "unlock_toggle": false,
   "separate_unlock_menu": true,
@@ -15,7 +13,6 @@
     "excella": "d9f932ae4012f73c15fbdc056dbaa387bb035147123a0f5efc4260444bcc9eba",
     "rebecca": "c462b70cd0c6d81e3cce5833cd982cf296230a3d5b37be554a3f90d47c1cbfc0",
     "jill_cos1": "51b1bb20acda2c5b555865988b700d7e9ef80bd2d9ea639c5498b3998756c5d8",
-    "jill_cos2": "237a78d232abafcb7b92acb82cef0d9477c79225067f1f200719b9efa0dbab0a",
     "unlock_only": "9129c6e133a02b47455ca50736b0cd1dea59904243f2590323aac45ff1d92d0d"
   },
   "ui": "preview-style 1280x720 RGB565; no unlock toggle screens",
@@ -40,8 +37,8 @@
   },
   "icon_source": "user_selected_mod_app_icon_2026-09-05",
   "icon_strategy": "direct_square_resize_to_256x256_jpeg",
-  "project_version": "17.1.0",
-  "build_state": "FINAL_BUILD_READY_CREATOR_ICON_BGM_DELTA_ROMFS",
+  "project_version": "17.2.0",
+  "build_state": "FINAL_BUILD_READY_V17_2_THREE_CHARACTERS_DELTA",
   "installer_title_id": "0100F5A0C0DE0000",
   "icon_sha256": "2b54394a13e12caeef8649a41cc92a1739857a30a4a133f27d047b103eb64aff",
   "finalized_date": "2026-09-05",
@@ -50,7 +47,8 @@
   "output_nsp": "RE5_Korean_Mod_Installer.nsp",
   "release_assets_required": [
     "RE5_v17_FULL_ROMFS.zip",
-    "RE5_v17_ROMFS_PATCH_17_1.zip"
+    "RE5_v17_ROMFS_PATCH_17_1.zip",
+    "RE5_v17_ROMFS_PATCH_17_2.zip"
   ],
   "release_romfs_sha256": "3871f2c56d5b9473f4404a7cb4aef7c1766a864a641f81f9b5e8b600efee7e31",
   "gallery_removed": true,
@@ -61,5 +59,14 @@
   "bgm": "iron_and_bone; 48kHz stereo s16le PCM; loop; -8dB",
   "release_romfs_size_bytes": 87743261,
   "release_romfs_patch_sha256": "2c8d640c9c926f13b09c91701d5684898a2929b120016e2addc0e5cedb4beeeb",
-  "release_strategy": "keep existing full ROMFS; upload changed-files overlay patch only"
+  "release_strategy": "keep existing full ROMFS and 17.1 patch; upload 17.2 changed-files overlay only; downloader removes stale Sheva/Jill2 files",
+  "character_display_names": [
+    "엑셀라",
+    "레베카",
+    "질"
+  ],
+  "default_sheva_selector_removed": true,
+  "jill_cos2_removed": true,
+  "jill_cos1_display_name": "질",
+  "release_romfs_patch_17_2_sha256": "8967cac1700495ad270ceea6eae895e3c45caae9e98e1ca05a83c05f7c01275d"
 }

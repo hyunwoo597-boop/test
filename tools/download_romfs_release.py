@@ -13,6 +13,8 @@ BASE_ASSET_NAME = "RE5_v17_FULL_ROMFS.zip"
 BASE_EXPECTED_SHA256 = "3871f2c56d5b9473f4404a7cb4aef7c1766a864a641f81f9b5e8b600efee7e31"
 PATCH_ASSET_NAME = "RE5_v17_ROMFS_PATCH_17_1.zip"
 PATCH_EXPECTED_SHA256 = "2c8d640c9c926f13b09c91701d5684898a2929b120016e2addc0e5cedb4beeeb"
+PATCH2_ASSET_NAME = "RE5_v17_ROMFS_PATCH_17_2.zip"
+PATCH2_EXPECTED_SHA256 = "8967cac1700495ad270ceea6eae895e3c45caae9e98e1ca05a83c05f7c01275d"
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "input"
 
@@ -109,6 +111,7 @@ try:
 
     base_path = INPUT / BASE_ASSET_NAME
     patch_path = INPUT / PATCH_ASSET_NAME
+    patch2_path = INPUT / PATCH2_ASSET_NAME
 
     print("Downloading base ROMFS:", BASE_ASSET_NAME)
     download(get_asset(release, BASE_ASSET_NAME), base_path)
@@ -120,20 +123,41 @@ try:
     download(get_asset(release, PATCH_ASSET_NAME), patch_path)
     if patch_path.stat().st_size < 1_000_000:
         raise RuntimeError(f"ROMFS patch ZIP unexpectedly small: {patch_path.stat().st_size} bytes")
-    verify_sha(patch_path, PATCH_EXPECTED_SHA256, "ROMFS patch")
+    verify_sha(patch_path, PATCH_EXPECTED_SHA256, "ROMFS patch 17.1")
+
+    print("Downloading ROMFS overlay patch:", PATCH2_ASSET_NAME)
+    download(get_asset(release, PATCH2_ASSET_NAME), patch2_path)
+    if patch2_path.stat().st_size < 100_000:
+        raise RuntimeError(f"ROMFS patch 17.2 ZIP unexpectedly small: {patch2_path.stat().st_size} bytes")
+    verify_sha(patch2_path, PATCH2_EXPECTED_SHA256, "ROMFS patch 17.2")
 
     print("Extracting base romfs/ ...")
     extract_base(base_path)
-    print("Overlaying changed ROMFS files only ...")
+    print("Overlaying v17.1 changed ROMFS files ...")
     overlay_patch(patch_path)
+    print("Overlaying v17.2 character-list UI files ...")
+    overlay_patch(patch2_path)
+
+    # v17.2 removes default Sheva from the character selector and removes Jill costume 2.
+    stale_paths = [
+        ROOT / "romfs" / "ui" / "char_0.rgb565",
+        ROOT / "romfs" / "ui" / "char_4.rgb565",
+        ROOT / "romfs" / "payload" / "mods" / "jill_cos2" / "main",
+    ]
+    for stale in stale_paths:
+        if stale.exists():
+            stale.unlink()
+    stale_dir = ROOT / "romfs" / "payload" / "mods" / "jill_cos2"
+    if stale_dir.exists():
+        stale_dir.rmdir()
 
     for needed in [ROOT / "romfs" / "payload", ROOT / "romfs" / "ui", ROOT / "romfs" / "audio"]:
         if not needed.is_dir():
             raise RuntimeError(f"final ROMFS incomplete: {needed} missing")
 
     print(
-        f"OK: base {BASE_ASSET_NAME} + patch {PATCH_ASSET_NAME} ready "
-        f"({base_path.stat().st_size:,} + {patch_path.stat().st_size:,} bytes downloaded)"
+        f"OK: base + v17.1 patch + v17.2 patch ready "
+        f"({base_path.stat().st_size:,} + {patch_path.stat().st_size:,} + {patch2_path.stat().st_size:,} bytes downloaded)"
     )
 except Exception as e:
     print("ERROR:", e, file=sys.stderr)
