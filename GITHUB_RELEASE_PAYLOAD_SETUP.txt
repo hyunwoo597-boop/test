@@ -1,0 +1,16 @@
+RE5 v17 GitHub lightweight repository setup
+
+1. Upload this lightweight project's CONTENTS to the repository root.
+   Do NOT upload romfs/payload; it is intentionally absent.
+
+2. Open the repository's latest GitHub Release.
+   Attach BOTH assets with these exact names:
+   - RE5_v17_romfs_payload.zip
+   - RE5_Update_1.11.nsp
+
+3. Repository secret required by the existing build:
+   - PROD_KEYS_B64
+
+4. Actions -> Build RE5 All-In-One NSP -> Run workflow.
+   The workflow downloads and extracts RE5_v17_romfs_payload.zip automatically,
+   then downloads RE5_Update_1.11.nsp and builds the installer + all-in-one NSP.
