@@ -76,10 +76,21 @@ int main(int argc, char *argv[]) {
 	gfxInitDefault();
 	gfxSetDoubleBuffering(GFX_BOTTOM, false);
 	osSetSpeedupEnable(true);
+	mkdir("sdmc:/3ds", 0777);
+	mkdir("sdmc:/3ds/bermuda", 0777);
 	chdir("sdmc:/3ds/bermuda");
-	dataPath = strdup("BERMUDA");
 	savePath = strdup(".");
-	musicPath = strdup("MUSIC");
+	{
+		// all-in-one CIA: game data, music and font packed in romfs:/ (saves stay on the SD card)
+		struct stat rst;
+		if (R_SUCCEEDED(romfsInit()) && stat("romfs:/BERMUDA", &rst) == 0 && S_ISDIR(rst.st_mode)) {
+			dataPath = strdup("romfs:/BERMUDA");
+			musicPath = strdup("romfs:/MUSIC");
+		} else {
+			dataPath = strdup("BERMUDA");
+			musicPath = strdup("MUSIC");
+		}
+	}
 #endif
 	if (argc == 2) {
 		// data path as the only command line argument
@@ -171,6 +182,7 @@ int main(int argc, char *argv[]) {
 	free(savePath);
 	free(musicPath);
 #ifdef BERMUDA_3DS
+	romfsExit();
 	gfxExit();
 #endif
 	return 0;

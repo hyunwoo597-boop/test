@@ -88,6 +88,7 @@ jobs:
           mkdir -p dist/3ds/bermuda
           cp bermuda.3dsx 3ds/BT16.TBM 3ds/README_3DS_KO.txt 3ds/Galmuri_OFL_LICENSE.txt dist/3ds/bermuda/
           if [ -f bermuda.cia ]; then cp bermuda.cia dist/; fi
+          mkdir -p dist/parts; cp bermuda.elf dist/parts/; cp bermuda.smdh bermuda.bnr dist/parts/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
