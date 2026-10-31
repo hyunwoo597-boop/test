@@ -36,10 +36,18 @@ jobs:
           apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip curl ca-certificates git >/dev/null
           mkdir -p /tmp/t && cd /tmp/t
           curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/3DSGuy/Project_CTR/releases > ctr.json
-          url=$(grep -o 'https://[^"]*makerom[^"]*ubuntu_x86_64\.zip' ctr.json | head -1)
+          url=https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
           echo "makerom: $url"
           curl -fsSL -o makerom.zip "$url"; unzip -o -q makerom.zip -d mk; find mk -type f
           install -m755 "$(find mk -type f -name 'makerom*' | head -1)" /usr/local/bin/makerom
+          if ! makerom -version >/dev/null 2>&1; then
+            echo "building makerom from source"
+            apt-get install -y -qq --no-install-recommends build-essential >/dev/null
+            git clone --depth 1 https://github.com/3DSGuy/Project_CTR pctr
+            make -C pctr/makerom deps >/dev/null && make -C pctr/makerom -j2 >/dev/null
+            install -m755 "$(find pctr/makerom/bin -type f -name makerom | head -1)" /usr/local/bin/makerom
+          fi
+          makerom -version 2>&1 | head -2
           for repo in diasurgical/bannertool Epicpkmn11/bannertool carstene1ns/3ds-bannertool Steveice10/bannertool; do
             curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/$repo/releases > bt.json || continue
             url=$(grep -o 'https://[^"]*\.zip' bt.json | grep -i -E 'bannertool|linux' | head -1)
