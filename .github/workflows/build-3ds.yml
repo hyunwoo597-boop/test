@@ -31,21 +31,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           exec > >(tee tools.log) 2>&1
-          set -eux
-          apt-get update && apt-get install -y --no-install-recommends unzip curl ca-certificates git
+          set -eu
+          set +o pipefail
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip curl ca-certificates git >/dev/null
           mkdir -p /tmp/t && cd /tmp/t
-          H="Authorization: Bearer $GH_TOKEN"
-          curl -fsSL -H "$H" https://api.github.com/repos/3DSGuy/Project_CTR/releases > ctr.json
-          grep -o '"browser_download_url": *"[^"]*"' ctr.json | head -20
-          url=$(grep -o 'https://[^"]*makerom[^"]*[Uu]buntu[^"]*\.zip' ctr.json | head -1)
-          [ -n "$url" ] || url=$(grep -o 'https://[^"]*makerom[^"]*linux[^"]*\.zip' ctr.json | head -1)
-          curl -fsSL -o makerom.zip "$url"; unzip -o makerom.zip -d mk; find mk -type f
-          install -m755 "$(find mk -name 'makerom*' -type f ! -name '*.zip' | head -1)" /usr/local/bin/makerom
-          curl -fsSL -H "$H" https://api.github.com/repos/Steveice10/bannertool/releases > bt.json
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/3DSGuy/Project_CTR/releases > ctr.json
+          url=$(grep -o 'https://[^"]*makerom[^"]*ubuntu_x86_64\.zip' ctr.json | head -1)
+          echo "makerom: $url"
+          curl -fsSL -o makerom.zip "$url"; unzip -o -q makerom.zip -d mk; find mk -type f
+          install -m755 "$(find mk -type f -name 'makerom*' | head -1)" /usr/local/bin/makerom
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/Steveice10/bannertool/releases > bt.json
           url=$(grep -o 'https://[^"]*bannertool[^"]*\.zip' bt.json | head -1)
-          curl -fsSL -o bannertool.zip "$url"; unzip -o bannertool.zip -d bt; find bt -type f
-          install -m755 "$(find bt -path '*linux*x86_64*' -name bannertool -type f | head -1)" /usr/local/bin/bannertool
+          echo "bannertool: $url"
+          curl -fsSL -o bannertool.zip "$url"; unzip -o -q bannertool.zip -d bt; find bt -type f
+          install -m755 "$(find bt -type f -path '*linux*x86_64*' -name bannertool | head -1)" /usr/local/bin/bannertool
           makerom -version 2>&1 | head -2 || true
+          bannertool 2>&1 | head -2 || true
 
       - name: Build CIA
         if: steps.tools.outcome == 'success'
