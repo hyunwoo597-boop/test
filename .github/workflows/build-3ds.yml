@@ -27,16 +27,24 @@ jobs:
         id: tools
         continue-on-error: true
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          exec > >(tee tools.log) 2>&1
           set -eux
           apt-get update && apt-get install -y --no-install-recommends unzip curl ca-certificates git
           mkdir -p /tmp/t && cd /tmp/t
-          url=$(curl -fsSL https://api.github.com/repos/3DSGuy/Project_CTR/releases | grep -o 'https://[^"]*makerom[^"]*ubuntu[^"]*\.zip' | head -1)
-          curl -fsSL -o makerom.zip "$url"; unzip -o makerom.zip -d mk
-          install -m755 "$(find mk -name makerom -type f | head -1)" /usr/local/bin/makerom
-          url=$(curl -fsSL https://api.github.com/repos/Steveice10/bannertool/releases/latest | grep -o 'https://[^"]*bannertool[^"]*\.zip' | head -1)
-          curl -fsSL -o bannertool.zip "$url"; unzip -o bannertool.zip -d bt
-          install -m755 "$(find bt -path '*linux-x86_64*' -name bannertool -type f | head -1)" /usr/local/bin/bannertool
+          H="Authorization: Bearer $GH_TOKEN"
+          curl -fsSL -H "$H" https://api.github.com/repos/3DSGuy/Project_CTR/releases > ctr.json
+          grep -o '"browser_download_url": *"[^"]*"' ctr.json | head -20
+          url=$(grep -o 'https://[^"]*makerom[^"]*[Uu]buntu[^"]*\.zip' ctr.json | head -1)
+          [ -n "$url" ] || url=$(grep -o 'https://[^"]*makerom[^"]*linux[^"]*\.zip' ctr.json | head -1)
+          curl -fsSL -o makerom.zip "$url"; unzip -o makerom.zip -d mk; find mk -type f
+          install -m755 "$(find mk -name 'makerom*' -type f ! -name '*.zip' | head -1)" /usr/local/bin/makerom
+          curl -fsSL -H "$H" https://api.github.com/repos/Steveice10/bannertool/releases > bt.json
+          url=$(grep -o 'https://[^"]*bannertool[^"]*\.zip' bt.json | head -1)
+          curl -fsSL -o bannertool.zip "$url"; unzip -o bannertool.zip -d bt; find bt -type f
+          install -m755 "$(find bt -path '*linux*x86_64*' -name bannertool -type f | head -1)" /usr/local/bin/bannertool
           makerom -version 2>&1 | head -2 || true
 
       - name: Build CIA
@@ -67,7 +75,7 @@ jobs:
         run: |
           set -eux
           git config --global --add safe.directory '*'
-          cp cia_build.log dist/ 2>/dev/null || true
+          cp cia_build.log dist/ 2>/dev/null || true; cp /tmp/t/../tools.log dist/ 2>/dev/null || cp tools.log dist/ 2>/dev/null || true
           cd dist
           git init -q -b bermuda-3ds-out
           git add -A
