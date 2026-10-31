@@ -40,11 +40,27 @@ jobs:
           echo "makerom: $url"
           curl -fsSL -o makerom.zip "$url"; unzip -o -q makerom.zip -d mk; find mk -type f
           install -m755 "$(find mk -type f -name 'makerom*' | head -1)" /usr/local/bin/makerom
-          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/Steveice10/bannertool/releases > bt.json
-          url=$(grep -o 'https://[^"]*bannertool[^"]*\.zip' bt.json | head -1)
-          echo "bannertool: $url"
-          curl -fsSL -o bannertool.zip "$url"; unzip -o -q bannertool.zip -d bt; find bt -type f
-          install -m755 "$(find bt -type f -path '*linux*x86_64*' -name bannertool | head -1)" /usr/local/bin/bannertool
+          for repo in diasurgical/bannertool Epicpkmn11/bannertool carstene1ns/3ds-bannertool Steveice10/bannertool; do
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/$repo/releases > bt.json || continue
+            url=$(grep -o 'https://[^"]*\.zip' bt.json | grep -i -E 'bannertool|linux' | head -1)
+            echo "$repo -> $url"
+            [ -n "$url" ] || continue
+            rm -rf bt; curl -fsSL -o bannertool.zip "$url" || continue
+            unzip -o -q bannertool.zip -d bt || continue
+            find bt -type f
+            f=$(find bt -type f -name bannertool | grep -i linux | grep -E 'x86_64|amd64|x64' | head -1)
+            [ -n "$f" ] || f=$(find bt -type f -name bannertool | head -1)
+            [ -n "$f" ] || continue
+            install -m755 "$f" /usr/local/bin/bannertool && break
+          done
+          if ! command -v bannertool; then
+            echo "building bannertool from source"
+            apt-get install -y -qq --no-install-recommends build-essential >/dev/null
+            for repo in diasurgical/bannertool Epicpkmn11/bannertool; do
+              rm -rf src; git clone --recursive --depth 1 https://github.com/$repo src || continue
+              (cd src && make -j2) && f=$(find src/output -type f -name bannertool | head -1) && install -m755 "$f" /usr/local/bin/bannertool && break
+            done
+          fi
           makerom -version 2>&1 | head -2 || true
           bannertool 2>&1 | head -2 || true
 
