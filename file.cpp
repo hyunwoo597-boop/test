@@ -183,6 +183,25 @@ File::~File() {
 bool File::open(const char *path, const char *mode) {
 	_impl->close();
 	free(_path);
+#ifdef BERMUDA_3DS
+	// patch folder: sdmc:/3ds/bermuda/patch/<same path as inside the CIA romfs> replaces the packed file
+	if (strncmp(path, "romfs:/", 7) == 0 && mode[0] == 'r') {
+		char patched[512];
+		snprintf(patched, sizeof(patched), "sdmc:/3ds/bermuda/patch/%s", path + 7);
+		for (int pass = 0; pass < 2; ++pass) {
+			if (pass == 1) {
+				for (char *p = patched + 24; *p; ++p) {
+					if (*p >= 'a' && *p <= 'z') *p -= 'a' - 'A';
+				}
+			}
+			if (_impl->open(patched, mode)) {
+				_path = strdup(patched);
+				return true;
+			}
+			_impl->close();
+		}
+	}
+#endif
 	_path = strdup(path);
 	return _impl->open(path, mode);
 }
