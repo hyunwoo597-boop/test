@@ -5,6 +5,9 @@ on:
   push:
     branches: [ bermuda-3ds ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,15 +29,15 @@ jobs:
         shell: bash
         run: |
           set -eux
-          apt-get update && apt-get install -y --no-install-recommends unzip curl ca-certificates
+          apt-get update && apt-get install -y --no-install-recommends unzip curl ca-certificates git
           mkdir -p /tmp/t && cd /tmp/t
-          curl -fsSL -o makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
-          unzip -o makerom.zip
-          curl -fsSL -o bannertool.zip https://github.com/Steveice10/bannertool/releases/download/1.2.0/bannertool.zip
-          unzip -o bannertool.zip
-          install -m755 $(find . -name makerom -type f | head -1) /usr/local/bin/makerom
-          install -m755 $(find . -path '*linux-x86_64*' -name bannertool -type f | head -1) /usr/local/bin/bannertool
-          makerom -version || true
+          url=$(curl -fsSL https://api.github.com/repos/3DSGuy/Project_CTR/releases | grep -o 'https://[^"]*makerom[^"]*ubuntu[^"]*\.zip' | head -1)
+          curl -fsSL -o makerom.zip "$url"; unzip -o makerom.zip -d mk
+          install -m755 "$(find mk -name makerom -type f | head -1)" /usr/local/bin/makerom
+          url=$(curl -fsSL https://api.github.com/repos/Steveice10/bannertool/releases/latest | grep -o 'https://[^"]*bannertool[^"]*\.zip' | head -1)
+          curl -fsSL -o bannertool.zip "$url"; unzip -o bannertool.zip -d bt
+          install -m755 "$(find bt -path '*linux-x86_64*' -name bannertool -type f | head -1)" /usr/local/bin/bannertool
+          makerom -version 2>&1 | head -2 || true
 
       - name: Build CIA
         if: steps.tools.outcome == 'success'
@@ -42,7 +45,7 @@ jobs:
         shell: bash
         run: |
           set -eux
-          make -f Makefile.3ds MAKEROM=makerom BANNERTOOL=bannertool cia
+          make -f Makefile.3ds MAKEROM=makerom BANNERTOOL=bannertool cia 2>&1 | tee cia_build.log
           ls -la bermuda.cia
 
       - name: Package
@@ -58,3 +61,15 @@ jobs:
           name: bermuda-3ds
           if-no-files-found: error
           path: dist/
+
+      - name: Publish outputs to branch bermuda-3ds-out
+        shell: bash
+        run: |
+          set -eux
+          git config --global --add safe.directory '*'
+          cp cia_build.log dist/ 2>/dev/null || true
+          cd dist
+          git init -q -b bermuda-3ds-out
+          git add -A
+          git -c user.name=github-actions -c user.email=actions@github.com commit -q -m "build ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}" bermuda-3ds-out
