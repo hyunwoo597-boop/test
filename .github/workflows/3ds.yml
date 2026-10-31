@@ -1,0 +1,54 @@
+name: Build 3DS (3dsx + CIA)
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -eux
+          dkp-pacman -Sy --noconfirm --needed 3ds-zlib || true
+          apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates
+      - name: Build 3dsx
+        shell: bash
+        run: |
+          set -eux
+          make -f Makefile.3ds -j"$(nproc)" 3dsx
+          ls -la bermuda.3dsx
+      - name: Fetch makerom / bannertool
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eux
+          mkdir -p /tmp/ctrtools && cd /tmp/ctrtools
+          if ! command -v makerom && [ ! -x "$DEVKITPRO/tools/bin/makerom" ]; then
+            url=$(curl -fsSL https://api.github.com/repos/3DSGuy/Project_CTR/releases | grep -o 'https://[^"]*makerom[^"]*ubuntu[^"]*\.zip' | head -1)
+            curl -fsSL -o makerom.zip "$url" && unzip -o makerom.zip && chmod +x makerom && cp makerom /usr/local/bin/
+          fi
+          if ! command -v bannertool && [ ! -x "$DEVKITPRO/tools/bin/bannertool" ]; then
+            url=$(curl -fsSL https://api.github.com/repos/Steveice10/bannertool/releases/latest | grep -o 'https://[^"]*bannertool[^"]*\.zip' | head -1)
+            curl -fsSL -o bannertool.zip "$url" && unzip -o bannertool.zip && cp linux-x86_64/bannertool /usr/local/bin/ && chmod +x /usr/local/bin/bannertool
+          fi
+      - name: Build CIA
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eux
+          make -f Makefile.3ds cia
+          ls -la bermuda.cia
+      - name: Package SD card folder (engine + font, no game data)
+        shell: bash
+        run: |
+          set -eux
+          mkdir -p out/sd/3ds/bermuda
+          cp bermuda.3dsx 3ds/BT16.TBM 3ds/README_3DS_KO.txt 3ds/Galmuri_OFL_LICENSE.txt out/sd/3ds/bermuda/
+          [ -f bermuda.cia ] && cp bermuda.cia out/ || echo "CIA not built"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bermuda-3ds
+          path: out/

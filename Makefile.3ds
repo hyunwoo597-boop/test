@@ -1,0 +1,68 @@
+# Nintendo 3DS build of the Bermuda Syndrome engine (native libctru backend, no SDL)
+# Requires devkitPro: devkitARM, libctru, 3dstools, 3ds-zlib
+# CIA additionally needs makerom and bannertool in $(TOOLDIR) (or in PATH)
+DEVKITPRO ?= /opt/devkitpro
+DEVKITARM := $(DEVKITPRO)/devkitARM
+PREFIX    := $(DEVKITARM)/bin/arm-none-eabi-
+CXX       := $(PREFIX)g++
+CTRULIB   := $(DEVKITPRO)/libctru
+PORTLIBS  := $(DEVKITPRO)/portlibs/3ds
+TOOLDIR   ?= $(DEVKITPRO)/tools/bin
+MAKEROM   ?= $(shell command -v makerom 2>/dev/null || echo $(TOOLDIR)/makerom)
+BANNERTOOL ?= $(shell command -v bannertool 2>/dev/null || echo $(TOOLDIR)/bannertool)
+
+APP_TITLE        := Bermuda Syndrome KO
+APP_DESCRIPTION  := Bermuda Syndrome (Korean) - cyxx engine 3DS port
+APP_AUTHOR       := Gregory Montoir / 3DS KOR port
+APP_PRODUCT_CODE := CTR-H-BRMD
+APP_UNIQUE_ID    := 0xBE451
+APP_VERSION_MAJOR := 0
+APP_VERSION_MINOR := 1
+APP_VERSION_MICRO := 7
+
+ARCH     := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
+DEFINES  := -D__3DS__ -DBERMUDA_3DS -DBERMUDA_POSIX -DBERMUDA_ZLIB -DBERMUDA_STB_VORBIS
+CXXFLAGS := -O2 -g -Wall -mword-relocations -ffunction-sections -fno-rtti -fno-exceptions \
+            $(ARCH) $(DEFINES) -I$(CTRULIB)/include -I$(PORTLIBS)/include
+LDFLAGS  := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,bermuda.map -L$(PORTLIBS)/lib -L$(CTRULIB)/lib
+LIBS     := -lz -lctru -lm
+
+SRCS := avi_player.cpp bag.cpp decoder.cpp dialogue.cpp file.cpp fs.cpp game.cpp \
+	main.cpp menu.cpp mixer_soft.cpp opcodes.cpp parser_dlg.cpp parser_scn.cpp \
+	random.cpp resource.cpp saveload.cpp screenshot.cpp staticres.cpp str.cpp \
+	systemstub_3ds.cpp util.cpp win16.cpp
+OBJDIR := build_3ds
+OBJS   := $(addprefix $(OBJDIR)/, $(SRCS:.cpp=.o))
+
+.PHONY: all 3dsx cia clean
+all: 3dsx cia
+3dsx: bermuda.3dsx
+cia: bermuda.cia
+
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
+
+$(OBJDIR)/%.o: %.cpp | $(OBJDIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+bermuda.elf: $(OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+bermuda.smdh: ctr/icon.png
+	$(TOOLDIR)/smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $< $@
+
+bermuda.3dsx: bermuda.elf bermuda.smdh
+	$(TOOLDIR)/3dsxtool $< $@ --smdh=bermuda.smdh
+
+bermuda.bnr: ctr/banner.png ctr/audio_silent.wav
+	$(BANNERTOOL) makebanner -i ctr/banner.png -a ctr/audio_silent.wav -o $@
+
+bermuda.cia: bermuda.elf bermuda.smdh bermuda.bnr ctr/template.rsf
+	$(MAKEROM) -f cia -o $@ -rsf ctr/template.rsf -target t -exefslogo -elf bermuda.elf \
+		-icon bermuda.smdh -banner bermuda.bnr -DAPP_ENCRYPTED=false \
+		-DAPP_TITLE="$(APP_TITLE)" -DAPP_PRODUCT_CODE="$(APP_PRODUCT_CODE)" -DAPP_UNIQUE_ID="$(APP_UNIQUE_ID)" \
+		-DAPP_SYSTEM_MODE="80MB" -DAPP_SYSTEM_MODE_EXT="124MB" -DAPP_LOGO_ID="Nintendo" \
+		-major $(APP_VERSION_MAJOR) -minor $(APP_VERSION_MINOR) -micro $(APP_VERSION_MICRO)
+
+clean:
+	rm -rf $(OBJDIR) bermuda.elf bermuda.map bermuda.smdh bermuda.3dsx bermuda.bnr bermuda.cia

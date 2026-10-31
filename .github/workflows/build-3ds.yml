@@ -1,0 +1,60 @@
+name: Build Bermuda Syndrome 3DS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ bermuda-3ds ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build 3DSX
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -f Makefile.3ds -j2 3dsx
+          ls -la bermuda.3dsx
+
+      - name: Get CIA tools
+        id: tools
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eux
+          apt-get update && apt-get install -y --no-install-recommends unzip curl ca-certificates
+          mkdir -p /tmp/t && cd /tmp/t
+          curl -fsSL -o makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
+          unzip -o makerom.zip
+          curl -fsSL -o bannertool.zip https://github.com/Steveice10/bannertool/releases/download/1.2.0/bannertool.zip
+          unzip -o bannertool.zip
+          install -m755 $(find . -name makerom -type f | head -1) /usr/local/bin/makerom
+          install -m755 $(find . -path '*linux-x86_64*' -name bannertool -type f | head -1) /usr/local/bin/bannertool
+          makerom -version || true
+
+      - name: Build CIA
+        if: steps.tools.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eux
+          make -f Makefile.3ds MAKEROM=makerom BANNERTOOL=bannertool cia
+          ls -la bermuda.cia
+
+      - name: Package
+        shell: bash
+        run: |
+          set -eux
+          mkdir -p dist/3ds/bermuda
+          cp bermuda.3dsx 3ds/BT16.TBM 3ds/README_3DS_KO.txt 3ds/Galmuri_OFL_LICENSE.txt dist/3ds/bermuda/
+          if [ -f bermuda.cia ]; then cp bermuda.cia dist/; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bermuda-3ds
+          if-no-files-found: error
+          path: dist/
