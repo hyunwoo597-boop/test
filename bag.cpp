@@ -11,6 +11,15 @@ void Game::handleBagMenu() {
 	const int xPosWnd = (kGameScreenWidth  - (_bagBackgroundImage.w + 1)) / 2;
 	const int yPosWnd = (kGameScreenHeight - (_bagBackgroundImage.h + 1)) / 4;
 
+		if (_stub->_touchPressed) {
+			int tx, ty;
+			if (_stub->bottomPanelTouch(1, _stub->_touchX, _stub->_touchY, &tx, &ty)) {
+				_stub->_pi.leftMouseButton = true;
+				_stub->_pi.mouseX = xPosWnd + tx;
+				_stub->_pi.mouseY = yPosWnd + ty;
+			}
+			_stub->_touchPressed = false;
+		}
 		if (_stub->_pi.leftMouseButton) {
 			_stub->_pi.leftMouseButton = false;
 			int xPos = _stub->_pi.mouseX - xPosWnd;
@@ -59,11 +68,13 @@ void Game::handleBagMenu() {
 		if (_stub->_pi.tab) {
 			_stub->_pi.tab = false;
 			_nextState = kStateGame;
+			_stub->setBottomPanel(1, 0, 0, 0, 0);
 			return;
 		}
 		if (_stub->_pi.enter) {
 			_stub->_pi.enter = false;
 			_nextState = kStateGame;
+			_stub->setBottomPanel(1, 0, 0, 0, 0);
 			return;
 		}
 
@@ -197,7 +208,12 @@ void Game::drawBagMenu(int xPosWnd, int yPosWnd) {
 		drawObject(87, _bagBackgroundImage.h - 25 - getBitmapHeight(weaponImage2), weaponImage2, &_bagBackgroundImage);
 	}
 
-	_stub->copyRect(xPosWnd, yPosWnd, _bagBackgroundImage.w + 1, _bagBackgroundImage.h + 1, _bagBackgroundImage.bits, _bagBackgroundImage.pitch);
+	if (_stub->hasBottomScreen()) {
+		_stub->setBottomPanel(0, 0, 0, 0, 0);
+		_stub->setBottomPanel(1, _bagBackgroundImage.bits, _bagBackgroundImage.w + 1, _bagBackgroundImage.h + 1, _bagBackgroundImage.pitch);
+	} else {
+		_stub->copyRect(xPosWnd, yPosWnd, _bagBackgroundImage.w + 1, _bagBackgroundImage.h + 1, _bagBackgroundImage.bits, _bagBackgroundImage.pitch);
+	}
 
 	memcpy(_bagBackgroundImage.bits, backup.bits, size);
 	free(backup.bits);

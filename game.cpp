@@ -335,6 +335,10 @@ void Game::mainLoop() {
 		}
 		break;
 	}
+	if (_stub->hasBottomScreen() && _state != kStateGame && _state != kStateBag) {
+		_stub->setBottomPanel(0, 0, 0, 0, 0);
+		_stub->setBottomPanel(1, 0, 0, 0, 0);
+	}
 	{
 		int fx = -1, fy = -1;
 		for (int i = 0; i < _sceneObjectsCount; ++i) {
@@ -1018,7 +1022,14 @@ void Game::redrawObjects() {
 			int x = _bagPosX + (invW - bagObjW) / 2;
 			drawObject(x, y, _bagObjectsTable[_currentBagObject].data, &_bitmapBuffer1);
 		}
-		if (_lifeBarDisplayed) {
+		if (_stub->hasBottomScreen()) {
+			// 3DS: the status bar goes to the bottom screen instead of covering the scene
+			if (_lifeBarDisplayed) {
+				drawStatusPanel();
+			} else {
+				_stub->setBottomPanel(0, 0, 0, 0, 0);
+			}
+		} else if (_lifeBarDisplayed) {
 			drawObject(386, _bitmapBuffer1.h - 18 - getBitmapHeight(_lifeBarImage), _lifeBarImage, &_bitmapBuffer1);
 			if (_varsTable[1] == 1) {
 				drawObject(150, _bitmapBuffer1.h - 18 - getBitmapHeight(_lifeBarImage), _lifeBarImage, &_bitmapBuffer1);
@@ -1479,4 +1490,49 @@ bool Game::intersectsBox(int num, int index, int x1, int y1, int x2, int y2) {
 		}
 	}
 	return false;
+}
+
+void Game::drawStatusPanel() {
+	// same layout as the in-scene status bar (x 150..386+w, rows 18..), drawn into a separate bitmap
+	static uint8_t *bits = 0;
+	static int allocSize = 0;
+	const int ox = 140, oy = 12;
+	const int pw = 386 - ox + getBitmapWidth(_lifeBarImage) + 10;
+	const int ph = 18 - oy + getBitmapHeight(_lifeBarImage) + 8;
+	if (pw * ph > allocSize) {
+		free(bits);
+		bits = (uint8_t *)malloc(pw * ph);
+		allocSize = bits ? pw * ph : 0;
+		if (!bits) return;
+	}
+	memset(bits, 0, pw * ph);
+	SceneBitmap panel;
+	panel.w = pw - 1;
+	panel.h = ph - 1;
+	panel.pitch = pw;
+	panel.bits = bits;
+	drawObject(386 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
+	if (_varsTable[1] == 1) {
+		drawObject(150 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
+		if (_swordIconImage) {
+			drawObject(173 - ox, panel.h - (18 - oy) - getBitmapHeight(_swordIconImage), _swordIconImage, &panel);
+		}
+	} else if (_varsTable[2] == 1) {
+		drawObject(150 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
+		int index = MIN(13, 13 - _varsTable[4]);
+		drawObject(173 - ox, panel.h - (31 - oy) - getBitmapHeight(_weaponIconImageTable[index]), _weaponIconImageTable[index], &panel);
+		if (_varsTable[3] < 5) {
+			index = (_varsTable[4] <= 0) ? 0 : 1;
+			uint8_t *p = _ammoIconImageTable[index][_varsTable[3]];
+			drawObject(184 - ox, panel.h - (41 - oy) - getBitmapHeight(p), p, &panel);
+		}
+	}
+	int index = (_varsTable[0] >= 10) ? 10 : _varsTable[0];
+	uint8_t *lifeBarFrame = _lifeBarImageTable[index][_lifeBarCurrentFrame];
+	drawObject(409 - ox, panel.h - (36 - oy) - getBitmapHeight(lifeBarFrame), lifeBarFrame, &panel);
+	++_lifeBarCurrentFrame;
+	if (_lifeBarCurrentFrame >= 12) {
+		_lifeBarCurrentFrame = 0;
+	}
+	_stub->setBottomPanel(0, bits, pw, ph, pw);
 }

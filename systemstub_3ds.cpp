@@ -94,6 +94,7 @@ struct SystemStub_3DS : SystemStub {
 		if (!_gameBuffer) {
 			error("SystemStub_3DS::init() unable to allocate game buffer");
 		}
+		memset(_panels, 0, sizeof(_panels));
 		_focusX = _focusY = -1;
 		_zoomOffsetY = -1;
 		loadViewMode();
@@ -177,6 +178,83 @@ struct SystemStub_3DS : SystemStub {
 			fclose(fp);
 		}
 	}
+	enum { kPanelMax = 2, kPanelAreaTop = 30, kPanelAreaBottom = 210 };
+	struct Panel {
+		uint32_t *rgb; // scaled RGB, 0xFF000000 = transparent
+		int w, h, x, y, srcW, srcH, cropX, cropY;
+	};
+	Panel _panels[kPanelMax];
+
+	virtual void setBottomPanel(int id, const uint8_t *bits, int w, int h, int pitch) {
+		if (id < 0 || id >= kPanelMax) return;
+		Panel &pn = _panels[id];
+		if (!bits) {
+			if (pn.rgb) {
+				free(pn.rgb);
+				pn.rgb = 0;
+				_bottomDirty = true;
+			}
+			return;
+		}
+		// crop to the opaque area, then fit into the bottom screen panel area (up to 2x)
+		int cx0 = w, cy0 = h, cx1 = -1, cy1 = -1;
+		for (int y = 0; y < h; ++y) {
+			const uint8_t *row = bits + (h - 1 - y) * pitch;
+			for (int x = 0; x < w; ++x) {
+				if (row[x]) {
+					if (x < cx0) cx0 = x;
+					if (x > cx1) cx1 = x;
+					if (y < cy0) cy0 = y;
+					if (y > cy1) cy1 = y;
+				}
+			}
+		}
+		if (cx1 < 0) {
+			setBottomPanel(id, 0, 0, 0, 0);
+			return;
+		}
+		const int cw = cx1 - cx0 + 1, ch = cy1 - cy0 + 1;
+		const int areaW = kBottomScreenW - 8, areaH = kPanelAreaBottom - kPanelAreaTop;
+		int dw = cw * 2, dh = ch * 2;
+		if (dw > areaW) { dh = dh * areaW / dw; dw = areaW; }
+		if (dh > areaH) { dw = dw * areaH / dh; dh = areaH; }
+		if (!pn.rgb || pn.w != dw || pn.h != dh) {
+			free(pn.rgb);
+			pn.rgb = (uint32_t *)malloc(dw * dh * sizeof(uint32_t));
+			if (!pn.rgb) return;
+		}
+		pn.w = dw; pn.h = dh; pn.srcW = cw; pn.srcH = ch; pn.cropX = cx0; pn.cropY = cy0;
+		pn.x = (kBottomScreenW - dw) / 2;
+		pn.y = kPanelAreaTop + (areaH - dh) / 2;
+		// box filter: average the opaque source pixels covering each output pixel
+		for (int y = 0; y < dh; ++y) {
+			const int sy0 = cy0 + y * ch / dh, sy1 = MAX(sy0 + 1, cy0 + (y + 1) * ch / dh);
+			for (int x = 0; x < dw; ++x) {
+				const int sx0 = cx0 + x * cw / dw, sx1 = MAX(sx0 + 1, cx0 + (x + 1) * cw / dw);
+				uint32_t r = 0, g = 0, b = 0, n = 0, t = 0;
+				for (int sy = sy0; sy < sy1; ++sy) {
+					const uint8_t *row = bits + (h - 1 - sy) * pitch; // bottom-up
+					for (int sx = sx0; sx < sx1; ++sx) {
+						const uint8_t c = row[sx];
+						if (c == 0) { ++t; continue; }
+						const uint32_t rgb = _pal[c];
+						r += (rgb >> 16) & 0xFF; g += (rgb >> 8) & 0xFF; b += rgb & 0xFF; ++n;
+					}
+				}
+				pn.rgb[y * dw + x] = (n == 0 || t > n) ? 0xFF000000 : (((r / n) << 16) | ((g / n) << 8) | (b / n));
+			}
+		}
+		_bottomDirty = true;
+	}
+	virtual bool bottomPanelTouch(int id, int x, int y, int *px, int *py) {
+		if (id < 0 || id >= kPanelMax || !_panels[id].rgb) return false;
+		const Panel &pn = _panels[id];
+		if (x < pn.x || y < pn.y || x >= pn.x + pn.w || y >= pn.y + pn.h) return false;
+		*px = pn.cropX + (x - pn.x) * pn.srcW / pn.w;
+		*py = pn.cropY + (y - pn.y) * pn.srcH / pn.h;
+		return true;
+	}
+
 	virtual void setFocus(int x, int y) {
 		_focusX = x;
 		_focusY = y;
@@ -421,9 +499,22 @@ struct SystemStub_3DS : SystemStub {
 		// the bottom screen is single-buffered: only rewrite it when it changed
 		if (!_bottomDirty) return;
 		uint8_t *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, 0, 0);
+		bool panels = false;
+		for (int i = 0; i < kPanelMax; ++i) panels |= _panels[i].rgb != 0;
 		for (int y = 0; y < kBottomScreenH; ++y) {
+			const bool area = panels && y >= kPanelAreaTop && y < kPanelAreaBottom; // panels replace the help text
 			for (int x = 0; x < kBottomScreenW; ++x) {
-				putPixel(fb, x, y, _bottom[y * kBottomScreenW + x]);
+				putPixel(fb, x, y, area ? kBottomPalette[0] : _bottom[y * kBottomScreenW + x]);
+			}
+		}
+		for (int i = 0; i < kPanelMax; ++i) {
+			const Panel &pn = _panels[i];
+			if (!pn.rgb) continue;
+			for (int y = 0; y < pn.h; ++y) {
+				for (int x = 0; x < pn.w; ++x) {
+					const uint32_t c = pn.rgb[y * pn.w + x];
+					if (c != 0xFF000000) putPixel(fb, pn.x + x, pn.y + y, c);
+				}
 			}
 		}
 		_bottomDirty = false;
