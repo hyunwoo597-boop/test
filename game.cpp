@@ -335,6 +335,19 @@ void Game::mainLoop() {
 		}
 		break;
 	}
+	{
+		int fx = -1, fy = -1;
+		for (int i = 0; i < _sceneObjectsCount; ++i) {
+			const SceneObject *so = &_sceneObjectsTable[i];
+			if ((so->state == 1 || so->state == 2) && (strcasecmp(so->name, "JACK") == 0 || strcasecmp(so->className, "JACK") == 0)) {
+				const SceneObjectFrameHeader &hdr = _sceneObjectFramesTable[so->frameNum].hdr;
+				fx = so->x + hdr.w / 2;
+				fy = so->y + hdr.h / 2;
+				break;
+			}
+		}
+		_stub->setFocus(fx, fy);
+	}
 	_stub->updateScreen();
 }
 

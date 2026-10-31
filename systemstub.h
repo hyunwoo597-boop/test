@@ -64,6 +64,7 @@ struct SystemStub {
 	// buf: 320x240 bottom-up 8bpp, values are kBottomColor* indices
 	virtual void copyBottomScreen(const uint8_t *buf, int pitch) {}
 	virtual bool hasBottomScreen() const { return false; }
+	virtual void setFocus(int x, int y) {} // player position on the 640x480 screen (-1 = none), used by zoomed views
 
 	virtual void init(const char *title, int w, int h, bool fullscreen, int screenMode) = 0;
 	virtual void destroy() = 0;

@@ -2,7 +2,10 @@
  * Bermuda Syndrome engine rewrite
  * Nintendo 3DS backend (libctru, software rendering)
  *
- * Top screen    : the 640x480 game screen box-filtered down to 320x240,
+ * Top screen    : the 640x480 game screen, three view modes (SELECT + X):
+ *                 0 = 320x240 (whole screen, correct aspect)
+ *                 1 = 400x240 (whole screen stretched to the full width)
+ *                 2 = 400x300 zoom, 240 rows shown, scrolling with Jack
  *                 cutscenes (320x200 Cinepak) shown 1:1.
  * Bottom screen : controls help / save slot status, and during dialogues
  *                 the choices at native size (see Game::drawBottomDialogue).
@@ -91,6 +94,9 @@ struct SystemStub_3DS : SystemStub {
 		if (!_gameBuffer) {
 			error("SystemStub_3DS::init() unable to allocate game buffer");
 		}
+		_focusX = _focusY = -1;
+		_zoomOffsetY = -1;
+		loadViewMode();
 		clearTop();
 		initAudio();
 		_mixer->open();
@@ -151,23 +157,93 @@ struct SystemStub_3DS : SystemStub {
 	virtual void copyRectWidescreen(int w, int h, const uint8_t *buf, int pitch) {}
 	virtual void clearWidescreen() {}
 
+	int _viewMode;
+	int _focusX, _focusY;
+	int _zoomOffsetY; // 16.16 source row at the top of the screen in zoom mode (-1 = snap)
+
+	void loadViewMode() {
+		_viewMode = 0;
+		FILE *fp = fopen("sdmc:/3ds/bermuda/view.cfg", "rb");
+		if (fp) {
+			const int c = fgetc(fp);
+			if (c >= '0' && c <= '2') _viewMode = c - '0';
+			fclose(fp);
+		}
+	}
+	void saveViewMode() {
+		FILE *fp = fopen("sdmc:/3ds/bermuda/view.cfg", "wb");
+		if (fp) {
+			fputc('0' + _viewMode, fp);
+			fclose(fp);
+		}
+	}
+	virtual void setFocus(int x, int y) {
+		_focusX = x;
+		_focusY = y;
+	}
+
+	// bilinear sample of the 640x480 buffer at 16.16 fixed point coordinates
+	inline uint32_t sample(int fx, int fy) const {
+		int x0 = fx >> 16, y0 = fy >> 16;
+		if (x0 > _w - 2) x0 = _w - 2;
+		if (y0 > _h - 2) y0 = _h - 2;
+		const uint32_t ax = (fx >> 8) & 0xFF, ay = (fy >> 8) & 0xFF;
+		const uint32_t *p = _gameBuffer + y0 * _w + x0;
+		const uint32_t a = p[0], b = p[1], c = p[_w], d = p[_w + 1];
+		const uint32_t w00 = (256 - ax) * (256 - ay), w10 = ax * (256 - ay), w01 = (256 - ax) * ay, w11 = ax * ay;
+		const uint32_t r = (((a >> 16) & 0xFF) * w00 + ((b >> 16) & 0xFF) * w10 + ((c >> 16) & 0xFF) * w01 + ((d >> 16) & 0xFF) * w11) >> 16;
+		const uint32_t g = (((a >> 8) & 0xFF) * w00 + ((b >> 8) & 0xFF) * w10 + ((c >> 8) & 0xFF) * w01 + ((d >> 8) & 0xFF) * w11) >> 16;
+		const uint32_t bl = ((a & 0xFF) * w00 + (b & 0xFF) * w10 + (c & 0xFF) * w01 + (d & 0xFF) * w11) >> 16;
+		return (r << 16) | (g << 8) | bl;
+	}
+
 	virtual void updateScreen() {
 		if (_yuvMode) {
 			return; // cutscene frames are presented from unlockYUV()
 		}
 		uint8_t *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0);
-		// 2x2 box filter 640x480 -> 320x240, centered (40px side bars)
-		for (int y = 0; y < kTopH; ++y) {
-			const uint32_t *s0 = _gameBuffer + (y * 2) * _w;
-			const uint32_t *s1 = s0 + _w;
-			for (int x = 0; x < 320; ++x) {
-				const uint32_t a = s0[x * 2], b = s0[x * 2 + 1], c = s1[x * 2], d = s1[x * 2 + 1];
-				const uint32_t rb = (((a & 0xFF00FF) + (b & 0xFF00FF) + (c & 0xFF00FF) + (d & 0xFF00FF) + 0x020002) >> 2) & 0xFF00FF;
-				const uint32_t g  = (((a & 0x00FF00) + (b & 0x00FF00) + (c & 0x00FF00) + (d & 0x00FF00) + 0x000200) >> 2) & 0x00FF00;
-				putPixel(fb, 40 + x, y, rb | g);
+		if (_viewMode == 0) {
+			// 2x2 box filter 640x480 -> 320x240, centered (40px side bars)
+			for (int y = 0; y < kTopH; ++y) {
+				const uint32_t *s0 = _gameBuffer + (y * 2) * _w;
+				const uint32_t *s1 = s0 + _w;
+				for (int x = 0; x < 320; ++x) {
+					const uint32_t a = s0[x * 2], b = s0[x * 2 + 1], c = s1[x * 2], d = s1[x * 2 + 1];
+					const uint32_t rb = (((a & 0xFF00FF) + (b & 0xFF00FF) + (c & 0xFF00FF) + (d & 0xFF00FF) + 0x020002) >> 2) & 0xFF00FF;
+					const uint32_t g  = (((a & 0x00FF00) + (b & 0x00FF00) + (c & 0x00FF00) + (d & 0x00FF00) + 0x000200) >> 2) & 0x00FF00;
+					putPixel(fb, 40 + x, y, rb | g);
+				}
+			}
+			clearSideBars(fb);
+		} else {
+			// source step: 640/400 = 1.6 horizontally; vertically 2.0 (full width) or 1.6 (zoom)
+			const int stepX = (_w << 16) / kTopW;
+			const int stepY = (_viewMode == 1) ? (_h << 16) / kTopH : stepX;
+			int oy = 0;
+			if (_viewMode == 2) {
+				const int maxOff = (_h << 16) - kTopH * stepY;
+				int target = maxOff / 2;
+				if (_focusY >= 0) {
+					target = (_focusY << 16) - (kTopH / 2) * stepY;
+				}
+				if (target < 0) target = 0;
+				if (target > maxOff) target = maxOff;
+				if (_zoomOffsetY < 0) {
+					_zoomOffsetY = target;
+				} else {
+					_zoomOffsetY += (target - _zoomOffsetY) / 6; // smooth follow
+				}
+				oy = _zoomOffsetY;
+			}
+			for (int y = 0; y < kTopH; ++y) {
+				int fy = oy + y * stepY + stepY / 2 - 0x8000;
+				if (fy < 0) fy = 0;
+				int fx = stepX / 2 - 0x8000;
+				for (int x = 0; x < kTopW; ++x, fx += stepX) {
+					putPixel(fb, x, y, sample(fx < 0 ? 0 : fx, fy));
+				}
 			}
 		}
-		clearSideBars(fb);
 		presentBottom();
 		gfxFlushBuffers();
 		gfxSwapBuffers();
@@ -228,11 +304,17 @@ struct SystemStub_3DS : SystemStub {
 		setButton(down, up, KEY_A, _pi.enter);
 		setButton(down, up, KEY_B, _pi.space);
 		setButton(down, up, KEY_Y, _pi.shift);
-		setButton(down, up, KEY_X, _pi.tab);
+		if (!select) setButton(down, up, KEY_X, _pi.tab);
 		setButton(down, up, KEY_START, _pi.escape);
 		if (select) {
 			if (down & KEY_L) _pi.stateSlot = -1;
 			if (down & KEY_R) _pi.stateSlot = 1;
+			if (down & KEY_X) {
+				_viewMode = (_viewMode + 1) % 3;
+				_zoomOffsetY = -1;
+				saveViewMode();
+				clearTop();
+			}
 		} else {
 			setButton(down, up, KEY_L, _pi.ctrl);
 			if (down & KEY_R) _pi.shift = true;
