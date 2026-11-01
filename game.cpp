@@ -966,6 +966,9 @@ void Game::redrawObjectBoxes(int previousObject, int currentObject) {
 void Game::redrawObjects() {
 	sortObjects();
 	int previousObject = -1;
+	const bool hudToBottom = _stub->hasBottomScreen() && _lifeBarDisplayed;
+	_hudIconFrame[0] = _hudIconFrame[1] = -1;
+	_hudIconBag = false;
 	for (int i = 0; i < _sceneObjectsCount; ++i) {
 		SceneObject *so = _sortedSceneObjectsTable[i];
 		if (so->state == 1 || so->state == 2) {
@@ -979,6 +982,14 @@ void Game::redrawObjects() {
 				//   object 13 pos 582,423 frame 1885 - should be displayed
 				//   object 14 pos 582,423 frame 1884 - shouldn't be displayed
 				continue;
+			}
+			if (hudToBottom) {
+				// 3DS: the small corner icons (MODE / VIEW ...) move to the bottom screen with the status bar
+				const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
+				if (hh.w <= 48 && hh.h <= 48 && so->y < 70 && (so->x < 70 || so->x >= 560)) {
+					_hudIconFrame[so->x < 70 ? 0 : 1] = so->frameNum;
+					continue;
+				}
 			}
 			if (so->flip == 2) {
 				int16_t y = _bitmapBuffer1.h + 1 - so->y - _sceneObjectFramesTable[so->frameNum].hdr.h;
@@ -1013,6 +1024,9 @@ void Game::redrawObjects() {
 			drawObject(93, _bitmapBuffer1.h - 230, _tempDecodeBuffer, &_bitmapBuffer1);
 		}
 		if (_currentBagObject >= 0 && _currentBagObject < _bagObjectsCount && _currentBagAction == 3) {
+			if (_stub->hasBottomScreen() && _lifeBarDisplayed) {
+				_hudIconBag = true;
+			} else {
 			drawObject(_bagPosX, _bitmapBuffer1.h + 1 - _bagPosY - getBitmapHeight(_iconBackgroundImage), _iconBackgroundImage, &_bitmapBuffer1);
 			int invW = getBitmapWidth(_iconBackgroundImage);
 			int invH = getBitmapHeight(_iconBackgroundImage);
@@ -1021,6 +1035,7 @@ void Game::redrawObjects() {
 			int y = _bitmapBuffer1.h + 1 - _bagPosY - (invH - bagObjH) / 2 - bagObjH;
 			int x = _bagPosX + (invW - bagObjW) / 2;
 			drawObject(x, y, _bagObjectsTable[_currentBagObject].data, &_bitmapBuffer1);
+			}
 		}
 		if (_stub->hasBottomScreen()) {
 			// 3DS: the status bar goes to the bottom screen instead of covering the scene
@@ -1493,12 +1508,25 @@ bool Game::intersectsBox(int num, int index, int x1, int y1, int x2, int y2) {
 }
 
 void Game::drawStatusPanel() {
-	// same layout as the in-scene status bar (x 150..386+w, rows 18..), drawn into a separate bitmap
+	// same layout as the in-scene status bar (x 150..386+w, rows 18..), drawn into a separate bitmap,
+	// with the scene corner icons on the left / right
 	static uint8_t *bits = 0;
 	static int allocSize = 0;
-	const int ox = 140, oy = 12;
-	const int pw = 386 - ox + getBitmapWidth(_lifeBarImage) + 10;
-	const int ph = 18 - oy + getBitmapHeight(_lifeBarImage) + 8;
+	int iconW[2] = { 0, 0 }, iconH[2] = { 0, 0 };
+	for (int i = 0; i < 2; ++i) {
+		if (_hudIconFrame[i] >= 0) {
+			iconW[i] = _sceneObjectFramesTable[_hudIconFrame[i]].hdr.w;
+			iconH[i] = _sceneObjectFramesTable[_hudIconFrame[i]].hdr.h;
+		} else if (i == 1 && _hudIconBag) {
+			iconW[i] = getBitmapWidth(_iconBackgroundImage);
+			iconH[i] = getBitmapHeight(_iconBackgroundImage);
+		}
+	}
+	const int barStart = (_varsTable[1] == 1 || _varsTable[2] == 1) ? 150 : 386; // no weapon: only the life bar
+	const int ox = barStart - 10 - (iconW[0] ? iconW[0] + 12 : 0), oy = 12;
+	const int barRight = 386 - ox + getBitmapWidth(_lifeBarImage) + 10;
+	const int pw = barRight + (iconW[1] ? iconW[1] + 8 : 0);
+	const int ph = MAX(18 - oy + getBitmapHeight(_lifeBarImage) + 8, MAX(iconH[0], iconH[1]) + 8);
 	if (pw * ph > allocSize) {
 		free(bits);
 		bits = (uint8_t *)malloc(pw * ph);
@@ -1511,6 +1539,20 @@ void Game::drawStatusPanel() {
 	panel.h = ph - 1;
 	panel.pitch = pw;
 	panel.bits = bits;
+	for (int i = 0; i < 2; ++i) {
+		if (!iconW[i]) continue;
+		const int ix = (i == 0) ? 4 : barRight;
+		const int iy = (ph - iconH[i]) / 2;
+		if (_hudIconFrame[i] >= 0) {
+			_sceneObjectFramesTable[_hudIconFrame[i]].decode(_sceneObjectFramesTable[_hudIconFrame[i]].data, _tempDecodeBuffer);
+			drawObject(ix, panel.h + 1 - iy - iconH[i], _tempDecodeBuffer, &panel);
+		} else {
+			drawObject(ix, panel.h + 1 - iy - iconH[i], _iconBackgroundImage, &panel);
+			const uint8_t *obj = _bagObjectsTable[_currentBagObject].data;
+			const int objW = getBitmapWidth(obj), objH = getBitmapHeight(obj);
+			drawObject(ix + (iconW[i] - objW) / 2, panel.h + 1 - iy - (iconH[i] - objH) / 2 - objH, obj, &panel);
+		}
+	}
 	drawObject(386 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
 	if (_varsTable[1] == 1) {
 		drawObject(150 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);

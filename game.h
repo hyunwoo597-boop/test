@@ -286,6 +286,8 @@ struct Game {
 	void handleBagMenu();
 	void drawBagMenu(int xPosWnd, int yPosWnd);
 	void drawStatusPanel();
+	int _hudIconFrame[2];
+	bool _hudIconBag;
 
 	// dialogue.cpp
 	void unloadDialogueData();
