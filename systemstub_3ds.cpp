@@ -5,7 +5,7 @@
  * Top screen    : the 640x480 game screen, three view modes (SELECT + X):
  *                 0 = 320x240 (whole screen, correct aspect)
  *                 1 = 400x240 (whole screen stretched to the full width)
- *                 2 = 400x300 zoom, 240 rows shown, scrolling with Jack
+ *                 2..4 = 1.25x / 1.67x / 2x zoom, scrolling with Jack
  *                 cutscenes (320x200 Cinepak) shown 1:1.
  * Bottom screen : controls help / save slot status, and during dialogues
  *                 the choices at native size (see Game::drawBottomDialogue).
@@ -160,6 +160,7 @@ struct SystemStub_3DS : SystemStub {
 
 	int _viewMode;
 	int _focusX, _focusY;
+	int _zoomOffsetX;
 	int _zoomOffsetY; // 16.16 source row at the top of the screen in zoom mode (-1 = snap)
 
 	void loadViewMode() {
@@ -167,7 +168,7 @@ struct SystemStub_3DS : SystemStub {
 		FILE *fp = fopen("sdmc:/3ds/bermuda/view.cfg", "rb");
 		if (fp) {
 			const int c = fgetc(fp);
-			if (c >= '0' && c <= '2') _viewMode = c - '0';
+			if (c >= '0' && c <= '4') _viewMode = c - '0';
 			fclose(fp);
 		}
 	}
@@ -294,29 +295,36 @@ struct SystemStub_3DS : SystemStub {
 			}
 			clearSideBars(fb);
 		} else {
-			// source step: 640/400 = 1.6 horizontally; vertically 2.0 (full width) or 1.6 (zoom)
-			const int stepX = (_w << 16) / kTopW;
+			// mode 1: whole screen stretched to 400x240
+			// mode 2..4: zoomed view (source step 1.6 / 1.2 / 1.0 pixel), scrolling with Jack
+			static const int kZoomStep[] = { 0, 0, 0x19999 /* 1.6 */, 0x13333 /* 1.2 */, 0x10000 /* 1.0 */ };
+			const int stepX = (_viewMode == 1) ? (_w << 16) / kTopW : kZoomStep[_viewMode];
 			const int stepY = (_viewMode == 1) ? (_h << 16) / kTopH : stepX;
-			int oy = 0;
-			if (_viewMode == 2) {
-				const int maxOff = (_h << 16) - kTopH * stepY;
-				int target = maxOff / 2;
-				if (_focusY >= 0) {
-					target = (_focusY << 16) - (kTopH / 2) * stepY;
-				}
-				if (target < 0) target = 0;
-				if (target > maxOff) target = maxOff;
+			int ox = 0, oy = 0;
+			if (_viewMode >= 2) {
+				const int maxX = (_w << 16) - kTopW * stepX;
+				const int maxY = (_h << 16) - kTopH * stepY;
+				int tx = maxX / 2, ty = maxY / 2;
+				if (_focusX >= 0) tx = (_focusX << 16) - (kTopW / 2) * stepX;
+				if (_focusY >= 0) ty = (_focusY << 16) - (kTopH / 2) * stepY;
+				if (tx < 0) tx = 0;
+				if (tx > maxX) tx = maxX;
+				if (ty < 0) ty = 0;
+				if (ty > maxY) ty = maxY;
 				if (_zoomOffsetY < 0) {
-					_zoomOffsetY = target;
+					_zoomOffsetX = tx;
+					_zoomOffsetY = ty;
 				} else {
-					_zoomOffsetY += (target - _zoomOffsetY) / 6; // smooth follow
+					_zoomOffsetX += (tx - _zoomOffsetX) / 6; // smooth follow
+					_zoomOffsetY += (ty - _zoomOffsetY) / 6;
 				}
+				ox = _zoomOffsetX;
 				oy = _zoomOffsetY;
 			}
 			for (int y = 0; y < kTopH; ++y) {
 				int fy = oy + y * stepY + stepY / 2 - 0x8000;
 				if (fy < 0) fy = 0;
-				int fx = stepX / 2 - 0x8000;
+				int fx = ox + stepX / 2 - 0x8000;
 				for (int x = 0; x < kTopW; ++x, fx += stepX) {
 					putPixel(fb, x, y, sample(fx < 0 ? 0 : fx, fy));
 				}
@@ -388,7 +396,7 @@ struct SystemStub_3DS : SystemStub {
 			if (down & KEY_L) _pi.stateSlot = -1;
 			if (down & KEY_R) _pi.stateSlot = 1;
 			if (down & KEY_X) {
-				_viewMode = (_viewMode + 1) % 3;
+				_viewMode = (_viewMode + 1) % 5;
 				_zoomOffsetY = -1;
 				saveViewMode();
 				clearTop();
