@@ -3,6 +3,7 @@
 #include "systemstub.h"
 
 void Game::initMenu(int num) {
+	removeStaleMenuObjects();
 	_menuOption = -1;
 	_menuHighlight = -1;
 	if (_stub->hasBottomScreen()) {

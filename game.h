@@ -292,6 +292,8 @@ struct Game {
 	int _hudExtraCount;
 	int _hudTouchX0, _hudTouchY0, _hudTouchX1, _hudTouchY1;
 	bool _hudTapEnter;
+	int _hudGaugeFrame[8], _hudGaugeX[8], _hudGaugeY[8], _hudGaugeCount, _hudGaugeW, _hudGaugeH;
+	void removeStaleMenuObjects();
 
 	// dialogue.cpp
 	void unloadDialogueData();

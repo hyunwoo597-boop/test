@@ -993,6 +993,26 @@ void Game::redrawObjects() {
 	_hudIconFrame[0] = _hudIconFrame[1] = -1;
 	_hudIconBag = false;
 	_hudExtraCount = 0;
+	_hudGaugeCount = 0;
+	_hudGaugeW = _hudGaugeH = 0;
+	int gx0 = 10000, gy0 = 10000, gx1 = -1, gy1 = -1; // bottom-right gauge frame(s), 640x480 top-down
+	if (hudToBottom) {
+		for (int i = 0; i < _sceneObjectsCount; ++i) {
+			const SceneObject *so = _sortedSceneObjectsTable[i];
+			if (so->state != 1 && so->state != 2) continue;
+			const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
+			if (hh.h <= 48 && hh.w <= 260 && hh.w >= 3 * hh.h && so->x >= 400 && so->y >= 420 && so->y + hh.h >= 460 && strcasecmp(so->name, "JACK") != 0) {
+				if (so->x < gx0) gx0 = so->x;
+				if (so->y < gy0) gy0 = so->y;
+				if (so->x + hh.w > gx1) gx1 = so->x + hh.w;
+				if (so->y + hh.h > gy1) gy1 = so->y + hh.h;
+			}
+		}
+	}
+	if (gx1 > 0) {
+		_hudGaugeW = gx1 - gx0;
+		_hudGaugeH = gy1 - gy0;
+	}
 	for (int i = 0; i < _sceneObjectsCount; ++i) {
 		SceneObject *so = _sortedSceneObjectsTable[i];
 		if (so->state == 1 || so->state == 2) {
@@ -1010,8 +1030,9 @@ void Game::redrawObjects() {
 			if (hudToBottom) {
 				// 3DS: the small corner icons (MODE / VIEW ...) move to the bottom screen with the status bar
 				const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
+				// only the engine's own HUD objects, never scene objects that happen to pass by a corner
 				const bool hudName = strcasecmp(so->name, "MODE") == 0 || strcasecmp(so->name, "VIEW") == 0 || strcasecmp(so->name, "FALL") == 0;
-				if ((hudName || (hh.w <= 64 && hh.h <= 64)) && so->y < 80 && (so->x < 90 || so->x >= 540)) {
+				if (hudName && hh.w <= 64 && hh.h <= 64) {
 					// keep the biggest frame per corner (some corners also hold tiny placeholder objects)
 					const int side = so->x < 90 ? 0 : 1;
 					const int cur = _hudIconFrame[side];
@@ -1020,9 +1041,13 @@ void Game::redrawObjects() {
 					}
 					continue;
 				}
-				// gauge in the bottom-right corner (air / energy bars of some scenes)
-				if (hh.h <= 48 && hh.w <= 260 && hh.w >= 3 * hh.h && so->x >= 400 && so->y >= 420 && so->y + hh.h >= 460 && strcasecmp(so->name, "JACK") != 0 && _hudExtraCount < 2) {
-					_hudExtraFrame[_hudExtraCount++] = so->frameNum;
+				// gauge in the bottom-right corner (underwater air ...): its frame plus everything drawn inside it
+				if (gx1 > 0 && so->x >= gx0 - 4 && so->y >= gy0 - 4 && so->x + hh.w <= gx1 + 4 && so->y + hh.h <= gy1 + 4
+					&& strcasecmp(so->name, "JACK") != 0 && _hudGaugeCount < 8) {
+					_hudGaugeFrame[_hudGaugeCount] = so->frameNum;
+					_hudGaugeX[_hudGaugeCount] = so->x - gx0;
+					_hudGaugeY[_hudGaugeCount] = so->y - gy0;
+					++_hudGaugeCount;
 					continue;
 				}
 			}
@@ -1559,7 +1584,8 @@ void Game::drawStatusPanel() {
 	const bool bagTop = _hudIconBag && _bagPosX < 320;
 	const int bagTopW = bagTop ? getBitmapWidth(_iconBackgroundImage) : 0;
 	const int bagTopH = bagTop ? getBitmapHeight(_iconBackgroundImage) : 0;
-	const int topH = (topIcon >= 0 || bagTop) ? MAX(topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.h : 0, bagTopH) + kGap : 0;
+	const int gaugeW = _hudGaugeCount ? _hudGaugeW : 0, gaugeH = _hudGaugeCount ? _hudGaugeH : 0;
+	const int topH = (topIcon >= 0 || bagTop || gaugeW) ? MAX(MAX(topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.h : 0, bagTopH), gaugeH) + kGap : 0;
 	if (weapon) {
 		Item it = { 1, boxW, boxH + 12, -1 };
 		items[count++] = it;
@@ -1585,7 +1611,7 @@ void Game::drawStatusPanel() {
 		pw += items[i].w + kGap;
 		rowH = MAX(rowH, items[i].h);
 	}
-	pw = MAX(pw, topW + bagTopW + 3 * kGap);
+	pw = MAX(pw, topW + bagTopW + gaugeW + 4 * kGap);
 	const int ph = topH + rowH + 2 * kGap;
 	if (pw * ph > allocSize) {
 		free(bits);
@@ -1612,6 +1638,14 @@ void Game::drawStatusPanel() {
 		PANEL_DRAW(tx, kGap, _iconBackgroundImage);
 		const uint8_t *obj = _bagObjectsTable[_currentBagObject].data;
 		PANEL_DRAW(tx + (bagTopW - getBitmapWidth(obj)) / 2, kGap + (bagTopH - getBitmapHeight(obj)) / 2, obj);
+	}
+	if (gaugeW) {
+		const int gx = pw - kGap - gaugeW, gt = kGap + (topH - kGap - gaugeH) / 2;
+		for (int i = 0; i < _hudGaugeCount; ++i) {
+			const int f = _hudGaugeFrame[i];
+			_sceneObjectFramesTable[f].decode(_sceneObjectFramesTable[f].data, _tempDecodeBuffer);
+			PANEL_DRAW(gx + _hudGaugeX[i], gt + _hudGaugeY[i], _tempDecodeBuffer);
+		}
 	}
 	_hudTouchX1 = (topIcon >= 0 || bagTop) ? tx + bagTopW : -1;
 	_hudTouchY1 = kGap + topH;
@@ -1660,4 +1694,17 @@ void Game::drawStatusPanel() {
 		_lifeBarCurrentFrame = 0;
 	}
 	_stub->setBottomPanel(0, bits, pw, ph, pw);
+}
+
+// a "MENU" scene object left over (e.g. restored from a save made while the menu was loaded)
+// would make the next initMenu() fail with "Duplicate object name MENU"
+void Game::removeStaleMenuObjects() {
+	for (int i = 0; i < _sceneObjectsCount; ) {
+		if (strcmp(_sceneObjectsTable[i].name, "MENU") == 0) {
+			memmove(&_sceneObjectsTable[i], &_sceneObjectsTable[i + 1], (_sceneObjectsCount - i - 1) * sizeof(SceneObject));
+			--_sceneObjectsCount;
+		} else {
+			++i;
+		}
+	}
 }
