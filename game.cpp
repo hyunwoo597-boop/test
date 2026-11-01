@@ -328,7 +328,8 @@ void Game::mainLoop() {
 			_nextState = kStateGame;
 			break;
 		case kMenuOptionQuitGame:
-			_nextState = kStateMenu2;
+			// 3DS: the 4th entry is "return to game" (quit from the HOME menu)
+			_nextState = _stub->hasBottomScreen() ? kStateGame : kStateMenu2;
 			break;
 		}
 		if (_stub->_pi.escape) {
