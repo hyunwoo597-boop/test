@@ -288,6 +288,8 @@ struct Game {
 	void drawStatusPanel();
 	int _hudIconFrame[2];
 	bool _hudIconBag;
+	int _hudExtraFrame[2];
+	int _hudExtraCount;
 
 	// dialogue.cpp
 	void unloadDialogueData();

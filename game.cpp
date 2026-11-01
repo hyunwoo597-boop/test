@@ -969,6 +969,7 @@ void Game::redrawObjects() {
 	const bool hudToBottom = _stub->hasBottomScreen() && _lifeBarDisplayed;
 	_hudIconFrame[0] = _hudIconFrame[1] = -1;
 	_hudIconBag = false;
+	_hudExtraCount = 0;
 	for (int i = 0; i < _sceneObjectsCount; ++i) {
 		SceneObject *so = _sortedSceneObjectsTable[i];
 		if (so->state == 1 || so->state == 2) {
@@ -988,6 +989,11 @@ void Game::redrawObjects() {
 				const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
 				if (hh.w <= 48 && hh.h <= 48 && so->y < 70 && (so->x < 70 || so->x >= 560)) {
 					_hudIconFrame[so->x < 70 ? 0 : 1] = so->frameNum;
+					continue;
+				}
+				// gauge in the bottom-right corner (air / energy bars of some scenes)
+				if (hh.h <= 32 && hh.w <= 220 && so->y >= 430 && so->y + hh.h >= 468 && so->x + hh.w >= 600 && _hudExtraCount < 2) {
+					_hudExtraFrame[_hudExtraCount++] = so->frameNum;
 					continue;
 				}
 			}
@@ -1508,25 +1514,44 @@ bool Game::intersectsBox(int num, int index, int x1, int y1, int x2, int y2) {
 }
 
 void Game::drawStatusPanel() {
-	// same layout as the in-scene status bar (x 150..386+w, rows 18..), drawn into a separate bitmap,
-	// with the scene corner icons on the left / right
+	// 3DS bottom screen status bar: the scene corner icons, the weapon box, the life box and corner gauges,
+	// packed side by side (the original spreads them over the top of the 640 pixel wide scene)
 	static uint8_t *bits = 0;
 	static int allocSize = 0;
-	int iconW[2] = { 0, 0 }, iconH[2] = { 0, 0 };
-	for (int i = 0; i < 2; ++i) {
-		if (_hudIconFrame[i] >= 0) {
-			iconW[i] = _sceneObjectFramesTable[_hudIconFrame[i]].hdr.w;
-			iconH[i] = _sceneObjectFramesTable[_hudIconFrame[i]].hdr.h;
-		} else if (i == 1 && _hudIconBag) {
-			iconW[i] = getBitmapWidth(_iconBackgroundImage);
-			iconH[i] = getBitmapHeight(_iconBackgroundImage);
-		}
+	enum { kGap = 6, kMaxItems = 6 };
+	struct Item { int type, w, h, frame; } items[kMaxItems];
+	int count = 0;
+	const int boxW = getBitmapWidth(_lifeBarImage), boxH = getBitmapHeight(_lifeBarImage);
+	const bool weapon = (_varsTable[1] == 1 || _varsTable[2] == 1);
+	if (_hudIconFrame[0] >= 0) {
+		Item it = { 0, _sceneObjectFramesTable[_hudIconFrame[0]].hdr.w, _sceneObjectFramesTable[_hudIconFrame[0]].hdr.h, _hudIconFrame[0] };
+		items[count++] = it;
 	}
-	const int barStart = (_varsTable[1] == 1 || _varsTable[2] == 1) ? 150 : 386; // no weapon: only the life bar
-	const int ox = barStart - 10 - (iconW[0] ? iconW[0] + 12 : 0), oy = 12;
-	const int barRight = 386 - ox + getBitmapWidth(_lifeBarImage) + 10;
-	const int pw = barRight + (iconW[1] ? iconW[1] + 8 : 0);
-	const int ph = MAX(18 - oy + getBitmapHeight(_lifeBarImage) + 8, MAX(iconH[0], iconH[1]) + 8);
+	if (weapon) {
+		Item it = { 1, boxW, boxH + 12, -1 };
+		items[count++] = it;
+	}
+	{
+		Item it = { 2, boxW, boxH + 12, -1 };
+		items[count++] = it;
+	}
+	if (_hudIconFrame[1] >= 0) {
+		Item it = { 0, _sceneObjectFramesTable[_hudIconFrame[1]].hdr.w, _sceneObjectFramesTable[_hudIconFrame[1]].hdr.h, _hudIconFrame[1] };
+		items[count++] = it;
+	} else if (_hudIconBag) {
+		Item it = { 3, getBitmapWidth(_iconBackgroundImage), getBitmapHeight(_iconBackgroundImage), -1 };
+		items[count++] = it;
+	}
+	for (int i = 0; i < _hudExtraCount && count < kMaxItems; ++i) {
+		Item it = { 0, _sceneObjectFramesTable[_hudExtraFrame[i]].hdr.w, _sceneObjectFramesTable[_hudExtraFrame[i]].hdr.h, _hudExtraFrame[i] };
+		items[count++] = it;
+	}
+	int pw = kGap, ph = 0;
+	for (int i = 0; i < count; ++i) {
+		pw += items[i].w + kGap;
+		ph = MAX(ph, items[i].h);
+	}
+	ph += 2 * kGap;
 	if (pw * ph > allocSize) {
 		free(bits);
 		bits = (uint8_t *)malloc(pw * ph);
@@ -1539,39 +1564,48 @@ void Game::drawStatusPanel() {
 	panel.h = ph - 1;
 	panel.pitch = pw;
 	panel.bits = bits;
-	for (int i = 0; i < 2; ++i) {
-		if (!iconW[i]) continue;
-		const int ix = (i == 0) ? 4 : barRight;
-		const int iy = (ph - iconH[i]) / 2;
-		if (_hudIconFrame[i] >= 0) {
-			_sceneObjectFramesTable[_hudIconFrame[i]].decode(_sceneObjectFramesTable[_hudIconFrame[i]].data, _tempDecodeBuffer);
-			drawObject(ix, panel.h + 1 - iy - iconH[i], _tempDecodeBuffer, &panel);
-		} else {
-			drawObject(ix, panel.h + 1 - iy - iconH[i], _iconBackgroundImage, &panel);
-			const uint8_t *obj = _bagObjectsTable[_currentBagObject].data;
-			const int objW = getBitmapWidth(obj), objH = getBitmapHeight(obj);
-			drawObject(ix + (iconW[i] - objW) / 2, panel.h + 1 - iy - (iconH[i] - objH) / 2 - objH, obj, &panel);
+	// draws img with its top-left corner at (x, top) in panel coordinates
+#define PANEL_DRAW(x, top, img) drawObject((x), panel.h + 1 - (top) - getBitmapHeight(img), (img), &panel)
+	int x = kGap;
+	for (int i = 0; i < count; ++i) {
+		const Item &it = items[i];
+		const int top = (ph - it.h) / 2;
+		switch (it.type) {
+		case 0: // scene object frame
+			_sceneObjectFramesTable[it.frame].decode(_sceneObjectFramesTable[it.frame].data, _tempDecodeBuffer);
+			PANEL_DRAW(x, top, _tempDecodeBuffer);
+			break;
+		case 1: // weapon box (original x 150, rows 18..)
+			PANEL_DRAW(x, top, _lifeBarImage);
+			if (_varsTable[1] == 1) {
+				if (_swordIconImage) {
+					PANEL_DRAW(x + 23, top, _swordIconImage);
+				}
+			} else {
+				int index = MIN(13, 13 - _varsTable[4]);
+				PANEL_DRAW(x + 23, top + 13, _weaponIconImageTable[index]);
+				if (_varsTable[3] < 5) {
+					index = (_varsTable[4] <= 0) ? 0 : 1;
+					PANEL_DRAW(x + 34, top + 23, _ammoIconImageTable[index][_varsTable[3]]);
+				}
+			}
+			break;
+		case 2: { // life box (original x 386, rows 18..)
+				PANEL_DRAW(x, top, _lifeBarImage);
+				const int index = (_varsTable[0] >= 10) ? 10 : _varsTable[0];
+				PANEL_DRAW(x + 23, top + 18, _lifeBarImageTable[index][_lifeBarCurrentFrame]);
+			}
+			break;
+		case 3: { // selected bag object
+				PANEL_DRAW(x, top, _iconBackgroundImage);
+				const uint8_t *obj = _bagObjectsTable[_currentBagObject].data;
+				PANEL_DRAW(x + (it.w - getBitmapWidth(obj)) / 2, top + (it.h - getBitmapHeight(obj)) / 2, obj);
+			}
+			break;
 		}
+		x += it.w + kGap;
 	}
-	drawObject(386 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
-	if (_varsTable[1] == 1) {
-		drawObject(150 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
-		if (_swordIconImage) {
-			drawObject(173 - ox, panel.h - (18 - oy) - getBitmapHeight(_swordIconImage), _swordIconImage, &panel);
-		}
-	} else if (_varsTable[2] == 1) {
-		drawObject(150 - ox, panel.h - (18 - oy) - getBitmapHeight(_lifeBarImage), _lifeBarImage, &panel);
-		int index = MIN(13, 13 - _varsTable[4]);
-		drawObject(173 - ox, panel.h - (31 - oy) - getBitmapHeight(_weaponIconImageTable[index]), _weaponIconImageTable[index], &panel);
-		if (_varsTable[3] < 5) {
-			index = (_varsTable[4] <= 0) ? 0 : 1;
-			uint8_t *p = _ammoIconImageTable[index][_varsTable[3]];
-			drawObject(184 - ox, panel.h - (41 - oy) - getBitmapHeight(p), p, &panel);
-		}
-	}
-	int index = (_varsTable[0] >= 10) ? 10 : _varsTable[0];
-	uint8_t *lifeBarFrame = _lifeBarImageTable[index][_lifeBarCurrentFrame];
-	drawObject(409 - ox, panel.h - (36 - oy) - getBitmapHeight(lifeBarFrame), lifeBarFrame, &panel);
+#undef PANEL_DRAW
 	++_lifeBarCurrentFrame;
 	if (_lifeBarCurrentFrame >= 12) {
 		_lifeBarCurrentFrame = 0;
