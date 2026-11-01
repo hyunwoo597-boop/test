@@ -2,7 +2,7 @@
  * Bermuda Syndrome engine rewrite
  * Nintendo 3DS backend (libctru, software rendering)
  *
- * Top screen    : the 640x480 game screen, three view modes (SELECT + X):
+ * Top screen    : the 640x480 game screen, view modes (R):
  *                 0 = 320x240 (whole screen, correct aspect)
  *                 1 = 400x240 (whole screen stretched to the full width)
  *                 2..4 = 1.25x / 1.67x / 2x zoom, scrolling with Jack
@@ -458,17 +458,15 @@ struct SystemStub_3DS : SystemStub {
 		if (select) {
 			if (down & KEY_L) _pi.stateSlot = -1;
 			if (down & KEY_R) _pi.stateSlot = 1;
-			if (down & KEY_X) {
+		} else {
+			setButton(down, up, KEY_L, _pi.ctrl);
+			if (down & KEY_R) { // R: cycle the view / zoom mode
 				_viewMode = (_viewMode + 1) % 5;
 				_panX = _panY = 0;
 				_zoomOffsetY = -1;
 				saveViewMode();
 				clearTop();
 			}
-		} else {
-			setButton(down, up, KEY_L, _pi.ctrl);
-			if (down & KEY_R) _pi.shift = true;
-			if ((up & KEY_R) && !(held & KEY_Y)) _pi.shift = false;
 		}
 		if (down & KEY_ZR) _pi.save = true;
 		if (down & KEY_ZL) _pi.load = true;
