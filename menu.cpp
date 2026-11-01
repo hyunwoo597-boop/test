@@ -48,7 +48,8 @@ void Game::handleMenu() {
 	const int yCursor = _stub->_pi.mouseY;
 	for (int frame = 0; frame < _sceneObjectMotionsTable[_menuObjectMotion].count; ++frame) {
 		SceneObjectFrame *sof = &_sceneObjectFramesTable[_sceneObjectMotionsTable[_menuObjectMotion].firstFrameIndex + frame];
-		if (xCursor >= sof->hdr.xPos && xCursor < sof->hdr.xPos + sof->hdr.w && yCursor >= sof->hdr.yPos && yCursor < sof->hdr.yPos + sof->hdr.h) {
+		// 3DS: no mouse; a stale position (left by a bag touch) would pin the highlight and block up/down
+		if (!_stub->hasBottomScreen() && xCursor >= sof->hdr.xPos && xCursor < sof->hdr.xPos + sof->hdr.w && yCursor >= sof->hdr.yPos && yCursor < sof->hdr.yPos + sof->hdr.h) {
 			_menuHighlight = frame;
 			if (_stub->_pi.leftMouseButton) {
 				_stub->_pi.leftMouseButton = false;

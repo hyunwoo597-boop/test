@@ -24,6 +24,9 @@ void Game::handleBagMenu() {
 			_stub->_pi.leftMouseButton = false;
 			int xPos = _stub->_pi.mouseX - xPosWnd;
 			int yPos = _stub->_pi.mouseY - yPosWnd;
+			if (_stub->hasBottomScreen()) {
+				_stub->_pi.mouseX = _stub->_pi.mouseY = -1000; // one-shot touch, no lingering cursor
+			}
 
 			// action area
 			for (int i = 0; i < 3; ++i) {
