@@ -343,6 +343,9 @@ void Game::mainLoop() {
 		_stub->setBottomPanel(0, 0, 0, 0, 0);
 		_stub->setBottomPanel(1, 0, 0, 0, 0);
 	}
+	if (_stub->hasBottomScreen() && _state != kStateDialogue) {
+		_stub->setBottomPanel(2, 0, 0, 0, 0);
+	}
 	{
 		int fx = -1, fy = -1;
 		for (int i = 0; i < _sceneObjectsCount; ++i) {

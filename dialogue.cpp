@@ -150,7 +150,9 @@ void Game::redrawDialogueTexts() {
 		}
 		y += 16;
 	}
-	_stub->copyRect(_dialogueTextRect.x, _dialogueTextRect.y, _dialogueTextRect.w, _dialogueTextRect.h, textBuffer, _dialogueTextRect.w, true);
+	if (!_stub->hasBottomScreen()) {
+		_stub->copyRect(_dialogueTextRect.x, _dialogueTextRect.y, _dialogueTextRect.w, _dialogueTextRect.h, textBuffer, _dialogueTextRect.w, true);
+	}
 	free(textBuffer);
 	if (_stub->hasBottomScreen()) {
 		drawBottomDialogue();
@@ -243,6 +245,7 @@ void Game::handleDialogue() {
 
 void Game::finiDialogue() {
 	if (_stub->hasBottomScreen()) {
+		_stub->setBottomPanel(2, 0, 0, 0, 0);
 		drawBottomScreen();
 	}
 	unloadDialogueData();
@@ -377,10 +380,37 @@ void Game::redrawDialogueSprite(int num) {
 	_dialogueTextRect.y = _dialogueBackgroundRect.y + 10;
 	_dialogueTextRect.h = _dialogueBackgroundRect.h - 20;
 
+	if (_stub->hasBottomScreen()) {
+		// 3DS: frame + animated portrait go to the bottom screen, next to the dialogue text
+		static uint8_t *portrait = 0;
+		static int portraitSize = 0;
+		const int fw = getBitmapWidth(_tempDecodeBuffer), fh = getBitmapHeight(_tempDecodeBuffer);
+		const int sw = getBitmapWidth(spriteBitmap), sh = getBitmapHeight(spriteBitmap);
+		if (fw * fh > portraitSize) {
+			free(portrait);
+			portrait = (uint8_t *)malloc(fw * fh);
+			portraitSize = portrait ? fw * fh : 0;
+		}
+		if (portrait) {
+			memcpy(portrait, getBitmapData(_tempDecodeBuffer), fw * fh);
+			const uint8_t *sp = getBitmapData(spriteBitmap);
+			const int ox = sprX / 2, oy = sprY / 2; // sprite top-left inside the frame (top-down)
+			for (int j = 0; j < sh; ++j) { // bottom-up rows
+				const int dy = fh - 1 - oy - (sh - 1 - j);
+				if (dy < 0 || dy >= fh) continue;
+				for (int i = 0; i < sw; ++i) {
+					const int dx = ox + i;
+					if (dx >= 0 && dx < fw) portrait[dy * fw + dx] = sp[j * sw + i];
+				}
+			}
+			_stub->setBottomPanel(2, portrait, fw, fh, fw);
+		}
+	} else {
 	_stub->copyRect(frameX, frameY, getBitmapWidth(_tempDecodeBuffer), getBitmapHeight(_tempDecodeBuffer), getBitmapData(_tempDecodeBuffer), getBitmapWidth(_tempDecodeBuffer));
 	frameX += sprX / 2;
 	frameY += sprY / 2;
 	_stub->copyRect(frameX, frameY, getBitmapWidth(spriteBitmap), getBitmapHeight(spriteBitmap), getBitmapData(spriteBitmap), getBitmapWidth(spriteBitmap));
+	}
 	++_dialogueSpriteCurrentFrameTable[num];
 	if (_dialogueSpriteCurrentFrameTable[num] >= _dialogueSpriteFrameCountTable[num]) {
 		_dialogueSpriteCurrentFrameTable[num] = 0;
@@ -413,9 +443,11 @@ void Game::redrawDialogueBackground() {
 		redrawObjectBoxes(previousObject, previousObject);
 	}
 
-	const uint8_t *src = _bitmapBuffer1.bits + _dialogueBackgroundRect.y * _bitmapBuffer1.pitch + _dialogueBackgroundRect.x;
-	_stub->copyRect(_dialogueBackgroundRect.x, _dialogueBackgroundRect.y, _dialogueBackgroundRect.w, _dialogueBackgroundRect.h, src, _bitmapBuffer1.pitch);
-	_stub->darkenRect(_dialogueBackgroundRect.x, _dialogueBackgroundRect.y, _dialogueBackgroundRect.w, _dialogueBackgroundRect.h);
+	if (!_stub->hasBottomScreen()) { // 3DS: the dialogue box is not drawn on the top screen
+		const uint8_t *src = _bitmapBuffer1.bits + _dialogueBackgroundRect.y * _bitmapBuffer1.pitch + _dialogueBackgroundRect.x;
+		_stub->copyRect(_dialogueBackgroundRect.x, _dialogueBackgroundRect.y, _dialogueBackgroundRect.w, _dialogueBackgroundRect.h, src, _bitmapBuffer1.pitch);
+		_stub->darkenRect(_dialogueBackgroundRect.x, _dialogueBackgroundRect.y, _dialogueBackgroundRect.w, _dialogueBackgroundRect.h);
+	}
 
 	for (int i = 0; i < _sceneObjectsCount; ++i) {
 		SceneObject *so = _sortedSceneObjectsTable[i];
@@ -519,7 +551,7 @@ void Game::drawBottomDialogue() {
 	bottomHLine(buf, 24, kBottomColorDim);
 
 	static const int kTop = 30;
-	static const int kTextX = 20;
+	const int kTextX = 20 + kBottomPortraitW; // the portrait panel takes the left column
 	const int maxW = kBottomScreenW - kTextX - 8;
 	const int count = MIN(_dialogueChoiceCounter, 16);
 	int heights[16];
@@ -545,7 +577,7 @@ void Game::drawBottomDialogue() {
 		const uint8_t color = (i == sel) ? kBottomColorSelected : kBottomColorText;
 		_bottomChoiceY0[i] = y;
 		if (i == sel && count > 1) {
-			drawChar(buf + (kBottomScreenH - 1 - y) * kBottomScreenW + 6, kBottomScreenW, _fontData, '>', color);
+			drawChar(buf + (kBottomScreenH - 1 - y) * kBottomScreenW + kTextX - 14, kBottomScreenW, _fontData, '>', color);
 		}
 		y = bottomDrawWrapped(buf, kTextX, y, maxW, _dialogueChoiceText[i], color, true) + 4;
 		_bottomChoiceY1[i] = y;

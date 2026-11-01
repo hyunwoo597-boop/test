@@ -35,6 +35,7 @@ struct PlayerInput {
 enum {
 	kBottomScreenW = 320,
 	kBottomScreenH = 240,
+	kBottomPortraitW = 96, // dialogue portrait column on the bottom screen (3DS)
 	kBottomColorBg = 0,
 	kBottomColorSelected = 1,
 	kBottomColorText = 2,
@@ -65,7 +66,7 @@ struct SystemStub {
 	virtual void copyBottomScreen(const uint8_t *buf, int pitch) {}
 	virtual bool hasBottomScreen() const { return false; }
 	virtual void setFocus(int x, int y) {}
-	// bottom-screen panels (3DS): id 0 = status bar, 1 = bag window; bits = palette indices, bottom-up rows, 0 = transparent; bits 0 hides
+	// bottom-screen panels (3DS): id 0 = status bar, 1 = bag window, 2 = dialogue portrait; bits = palette indices, bottom-up rows, 0 = transparent; bits 0 hides
 	virtual void setBottomPanel(int id, const uint8_t *bits, int w, int h, int pitch) {}
 	virtual void setBottomPanelSplit(int id, int splitX) {}
 	virtual bool bottomPanelTouch(int id, int x, int y, int *px, int *py) { return false; } // player position on the 640x480 screen (-1 = none), used by zoomed views

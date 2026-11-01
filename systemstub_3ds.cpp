@@ -181,7 +181,7 @@ struct SystemStub_3DS : SystemStub {
 			fclose(fp);
 		}
 	}
-	enum { kPanelMax = 2, kPanelAreaTop = 30, kPanelAreaBottom = 210 };
+	enum { kPanelMax = 3, kPanelAreaTop = 30, kPanelAreaBottom = 210 };
 	struct Panel {
 		uint32_t *rgb; // scaled RGB, 0xFF000000 = transparent
 		int w, h, x, y, srcW, srcH, cropX, cropY;
@@ -248,8 +248,9 @@ struct SystemStub_3DS : SystemStub {
 		}
 		const int cw = cx1 - cx0 + 1, ch = cy1 - cy0 + 1;
 		const bool full = (id == 1); // the bag window may use the whole bottom screen
-		const int areaTop = full ? 0 : kPanelAreaTop, areaBottom = full ? kBottomScreenH : kPanelAreaBottom;
-		const int areaW = kBottomScreenW - (full ? 0 : 8), areaH = areaBottom - areaTop;
+		const bool portrait = (id == 2); // dialogue portrait: left column under the dialogue header
+		const int areaTop = full ? 0 : (portrait ? 30 : kPanelAreaTop), areaBottom = full ? kBottomScreenH : (portrait ? kBottomScreenH - 4 : kPanelAreaBottom);
+		const int areaW = portrait ? kBottomPortraitW - 6 : kBottomScreenW - (full ? 0 : 8), areaH = areaBottom - areaTop;
 		int dw = cw * 2, dh = ch * 2;
 		if (dw > areaW) { dh = dh * areaW / dw; dw = areaW; }
 		if (dh > areaH) { dw = dw * areaH / dh; dh = areaH; }
@@ -259,8 +260,8 @@ struct SystemStub_3DS : SystemStub {
 			if (!pn.rgb) return;
 		}
 		pn.w = dw; pn.h = dh; pn.srcW = cw; pn.srcH = ch; pn.cropX = cx0; pn.cropY = cy0;
-		pn.x = (kBottomScreenW - dw) / 2;
-		pn.y = areaTop + (areaH - dh) / 2;
+		pn.x = portrait ? 4 + (areaW - dw) / 2 : (kBottomScreenW - dw) / 2;
+		pn.y = portrait ? areaTop : areaTop + (areaH - dh) / 2;
 		// box filter: average the opaque source pixels covering each output pixel
 		for (int y = 0; y < dh; ++y) {
 			const int sy0 = cy0 + y * ch / dh, sy1 = MAX(sy0 + 1, cy0 + (y + 1) * ch / dh);
@@ -542,7 +543,7 @@ struct SystemStub_3DS : SystemStub {
 		if (!_bottomDirty) return;
 		uint8_t *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, 0, 0);
 		bool panels = false;
-		for (int i = 0; i < kPanelMax; ++i) panels |= _panels[i].rgb != 0;
+		for (int i = 0; i < 2; ++i) panels |= _panels[i].rgb != 0; // the portrait does not hide the text
 		for (int y = 0; y < kBottomScreenH; ++y) {
 			const bool area = panels && ((y >= kPanelAreaTop && y < kPanelAreaBottom) || _panels[1].rgb); // panels replace the help text
 			for (int x = 0; x < kBottomScreenW; ++x) {
