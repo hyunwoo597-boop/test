@@ -176,7 +176,12 @@ int main(int argc, char *argv[]) {
 		} while (!g_stub->_pi.fastMode && g_stub->getTimeStamp() < end);
 		lastFrameTimeStamp = g_stub->getTimeStamp();
 	}
+#ifdef BERMUDA_3DS
+	// closing from the HOME menu: only stop the audio thread / DSP, skip the full engine teardown
+	g_stub->destroy();
+#else
 	fini();
+#endif
 #endif
 	free(dataPath);
 	free(savePath);

@@ -381,10 +381,6 @@ struct SystemStub_3DS : SystemStub {
 		const u32 up = hidKeysUp();
 		const u32 held = hidKeysHeld();
 
-		if ((held & KEY_START) && (held & KEY_SELECT)) {
-			_quit = true;
-			return;
-		}
 		const bool select = (held & KEY_SELECT) != 0;
 
 		setButton(down, up, KEY_A, _pi.enter);

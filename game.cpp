@@ -323,7 +323,11 @@ void Game::mainLoop() {
 		handleMenu();
 		switch (_menuOption) {
 		case kMenuOptionExitGame:
-			_stub->_quit = true;
+			if (_stub->hasBottomScreen()) {
+				_nextState = kStateGame; // 3DS: no quit from the menu, close the game from the HOME menu
+			} else {
+				_stub->_quit = true;
+			}
 			break;
 		case kMenuOptionReturnGame:
 			_nextState = kStateGame;

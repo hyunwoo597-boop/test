@@ -12,7 +12,7 @@ static const char *const kKoHelp[] = {
 	"START : \xB8\xDE\xB4\xBA   SELECT + X : \xC8\xAD\xB8\xE9 \xC5\xA9\xB1\xE2",
 	"ZR : \xC0\xFA\xC0\xE5     ZL : \xBA\xD2\xB7\xAF\xBF\xC0\xB1\xE2",
 	"SELECT + L/R : \xBD\xBD\xB7\xD4 \xBA\xAF\xB0\xE6",
-	"START + SELECT : \xC1\xBE\xB7\xE1",
+	"\xB0\xD4\xC0\xD3 \xC1\xBE\xB7\xE1\xB4\xC2 HOME \xB8\xDE\xB4\xBA\xBF\xA1\xBC\xAD",
 	0
 };
 static const char *const kKoDlgHdr = "\xB4\xEB\xC8\xAD  (\xC0\xA7/\xBE\xC6\xB7\xA1, A \xB6\xC7\xB4\xC2 \xC5\xCD\xC4\xA1\xB7\xCE \xBC\xB1\xC5\xC3)";
@@ -31,7 +31,7 @@ static const char *const kEnHelp[] = {
 	"START : menu   SELECT + X : view",
 	"ZR : save    ZL : load",
 	"SELECT + L/R : change slot",
-	"START + SELECT : quit",
+	"Quit from the HOME menu",
 	0
 };
 static const char *const kEnDlgHdr = "Dialogue  (Up/Down, A or touch)";
