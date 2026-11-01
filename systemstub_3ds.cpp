@@ -98,6 +98,8 @@ struct SystemStub_3DS : SystemStub {
 		memset(_panelSplit, 0, sizeof(_panelSplit));
 		_splitBuf = 0;
 		_focusX = _focusY = -1;
+		_panX = _panY = 0;
+		_panRecenter = false;
 		_zoomOffsetY = -1;
 		loadViewMode();
 		clearTop();
@@ -163,6 +165,8 @@ struct SystemStub_3DS : SystemStub {
 	int _viewMode;
 	int _focusX, _focusY;
 	int _zoomOffsetX;
+	int _panX, _panY; // manual Circle Pad scroll in zoomed views (16.16 source pixels)
+	bool _panRecenter;
 	int _zoomOffsetY; // 16.16 source row at the top of the screen in zoom mode (-1 = snap)
 
 	void loadViewMode() {
@@ -346,6 +350,18 @@ struct SystemStub_3DS : SystemStub {
 				int tx = maxX / 2, ty = maxY / 2;
 				if (_focusX >= 0) tx = (_focusX << 16) - (kTopW / 2) * stepX;
 				if (_focusY >= 0) ty = (_focusY << 16) - (kTopH / 2) * stepY;
+				if (_panRecenter) { // ease the manual scroll back to zero
+					_panX -= _panX / 4;
+					_panY -= _panY / 4;
+					if (abs(_panX) < 0x10000 && abs(_panY) < 0x10000) { _panX = _panY = 0; _panRecenter = false; }
+				}
+				tx += _panX;
+				ty += _panY;
+				// keep the manual offset inside the picture so stick moves always have a visible effect
+				if (tx < 0) _panX -= tx;
+				if (tx > maxX) _panX -= tx - maxX;
+				if (ty < 0) _panY -= ty;
+				if (ty > maxY) _panY -= ty - maxY;
 				if (tx < 0) tx = 0;
 				if (tx > maxX) tx = maxX;
 				if (ty < 0) ty = 0;
@@ -432,6 +448,7 @@ struct SystemStub_3DS : SystemStub {
 			if (down & KEY_R) _pi.stateSlot = 1;
 			if (down & KEY_X) {
 				_viewMode = (_viewMode + 1) % 5;
+				_panX = _panY = 0;
 				_zoomOffsetY = -1;
 				saveViewMode();
 				clearTop();
@@ -444,10 +461,34 @@ struct SystemStub_3DS : SystemStub {
 		if (down & KEY_ZR) _pi.save = true;
 		if (down & KEY_ZL) _pi.load = true;
 
-		setDir(down, up, KEY_DUP | KEY_CPAD_UP, PlayerInput::DIR_UP);
-		setDir(down, up, KEY_DDOWN | KEY_CPAD_DOWN, PlayerInput::DIR_DOWN);
-		setDir(down, up, KEY_DLEFT | KEY_CPAD_LEFT, PlayerInput::DIR_LEFT);
-		setDir(down, up, KEY_DRIGHT | KEY_CPAD_RIGHT, PlayerInput::DIR_RIGHT);
+		// zoomed views: the D-pad moves Jack, the Circle Pad scrolls the view
+		const bool padPans = _viewMode >= 2;
+		const u32 cpad = padPans ? 0 : (KEY_CPAD_UP | KEY_CPAD_DOWN | KEY_CPAD_LEFT | KEY_CPAD_RIGHT);
+		if (padPans) {
+			// releasing a circle-pad direction that was held when entering a zoom mode must not leave Jack walking
+			const u32 cpadUp = up & (KEY_CPAD_UP | KEY_CPAD_DOWN | KEY_CPAD_LEFT | KEY_CPAD_RIGHT);
+			if (cpadUp && !(held & (KEY_DUP | KEY_DDOWN | KEY_DLEFT | KEY_DRIGHT))) _pi.dirMask = 0;
+			circlePosition cp;
+			hidCircleRead(&cp);
+			const int dz = 24;
+			int vx = abs(cp.dx) > dz ? cp.dx : 0, vy = abs(cp.dy) > dz ? cp.dy : 0;
+			// full tilt (~156) scrolls about 10 source pixels per frame
+			_panX += vx * (10 << 16) / 156;
+			_panY -= vy * (10 << 16) / 156; // stick up = look up
+			const int lim = (_w << 16) / 2;
+			if (_panX > lim) _panX = lim;
+			if (_panX < -lim) _panX = -lim;
+			if (_panY > lim) _panY = lim;
+			if (_panY < -lim) _panY = -lim;
+			if (held & (KEY_DUP | KEY_DDOWN | KEY_DLEFT | KEY_DRIGHT)) {
+				_panRecenter = true; // moving Jack brings the view back onto him
+			}
+			if (vx || vy) _panRecenter = false;
+		}
+		setDir(down, up, KEY_DUP | (cpad & KEY_CPAD_UP), PlayerInput::DIR_UP);
+		setDir(down, up, KEY_DDOWN | (cpad & KEY_CPAD_DOWN), PlayerInput::DIR_DOWN);
+		setDir(down, up, KEY_DLEFT | (cpad & KEY_CPAD_LEFT), PlayerInput::DIR_LEFT);
+		setDir(down, up, KEY_DRIGHT | (cpad & KEY_CPAD_RIGHT), PlayerInput::DIR_RIGHT);
 
 		if (down & KEY_TOUCH) {
 			touchPosition tp;
