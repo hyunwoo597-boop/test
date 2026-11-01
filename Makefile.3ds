@@ -30,7 +30,7 @@ LIBS     := -lz -lctru -lm
 SRCS := avi_player.cpp bag.cpp decoder.cpp dialogue.cpp file.cpp fs.cpp game.cpp \
 	main.cpp menu.cpp mixer_soft.cpp opcodes.cpp parser_dlg.cpp parser_scn.cpp \
 	random.cpp resource.cpp saveload.cpp screenshot.cpp staticres.cpp str.cpp \
-	systemstub_3ds.cpp util.cpp win16.cpp
+	systemstub_3ds.cpp util.cpp win16.cpp midi_tsf.cpp
 OBJDIR := build_3ds
 OBJS   := $(addprefix $(OBJDIR)/, $(SRCS:.cpp=.o))
 

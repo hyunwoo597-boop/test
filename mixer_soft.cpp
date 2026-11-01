@@ -6,6 +6,7 @@
 #include "file.h"
 #include "mixer.h"
 #include "systemstub.h"
+#include "midi_tsf.h"
 #ifdef BERMUDA_VORBIS
 #include <vorbis/vorbisfile.h>
 #endif
@@ -338,6 +339,45 @@ struct MixerChannel_StbVorbis : MixerChannel {
 };
 #endif
 
+struct MixerChannel_Midi : MixerChannel {
+	MidiPlayer *_p;
+	int16_t _buf[512 * 2];
+	MixerChannel_Midi() : _p(0) {}
+	virtual ~MixerChannel_Midi() {
+		Midi_close(_p);
+	}
+	virtual bool load(File *f, int mixerSampleRate) {
+		const int size = f->size();
+		if (size <= 0) {
+			return false;
+		}
+		uint8_t *data = (uint8_t *)malloc(size);
+		if (!data) {
+			return false;
+		}
+		const int count = f->read(data, size);
+		_p = Midi_open(data, count, mixerSampleRate);
+		free(data);
+		return _p != 0;
+	}
+	virtual int read(int16_t *dst, int samples) {
+		int done = 0;
+		while (done < samples) {
+			int n = samples - done;
+			if (n > 512) {
+				n = 512;
+			}
+			Midi_render(_p, _buf, n);
+			for (int i = 0; i < n * 2; ++i) {
+				mixSample(dst[i], _buf[i], _musicVolume);
+			}
+			dst += n * 2;
+			done += n;
+		}
+		return done;
+	}
+};
+
 struct MixerSoftware: Mixer {
 	static const int kMaxChannels = 4;
 
@@ -389,6 +429,17 @@ struct MixerSoftware: Mixer {
 
 	virtual void playMusic(File *f, int *id) {
 		debug(DBG_MIXER, "Mixer::playMusic()");
+		{
+			char hdr[4] = { 0, 0, 0, 0 };
+			const uint32_t pos = f->tell();
+			f->read(hdr, 4);
+			f->seek(pos, SEEK_SET);
+			if (memcmp(hdr, "MThd", 4) == 0) {
+				LockAudioStack las(_stub);
+				startSound(f, id, new MixerChannel_Midi);
+				return;
+			}
+		}
 #ifdef BERMUDA_VORBIS
 		LockAudioStack las(_stub);
 		startSound(f, id, new MixerChannel_Vorbis);
