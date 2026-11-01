@@ -58,7 +58,7 @@ struct SystemStub_3DS : SystemStub {
 
 	// bottom screen (kept as RGB so it can be redrawn after a swap)
 	uint32_t _bottom[kBottomScreenW * kBottomScreenH];
-	bool _bottomDirty;
+	int _bottomDirty; // number of bottom buffers (double-buffered) still to repaint
 
 	// audio
 	bool _ndspOk;
@@ -72,7 +72,7 @@ struct SystemStub_3DS : SystemStub {
 
 	SystemStub_3DS()
 		: _gameBuffer(0), _w(0), _h(0), _yuvMode(false), _yuvW(0), _yuvH(0), _yuvBuffer(0),
-		  _bottomDirty(true), _ndspOk(false), _audioRunning(false), _audioThread(0),
+		  _bottomDirty(2), _ndspOk(false), _audioRunning(false), _audioThread(0),
 		  _audioProc(0), _audioParam(0), _audioMem(0) {
 		memset(_pal, 0, sizeof(_pal));
 		memset(&_pi, 0, sizeof(_pi));
@@ -229,7 +229,7 @@ struct SystemStub_3DS : SystemStub {
 			if (pn.rgb) {
 				free(pn.rgb);
 				pn.rgb = 0;
-				_bottomDirty = true;
+				_bottomDirty = 2;
 			}
 			return;
 		}
@@ -284,7 +284,7 @@ struct SystemStub_3DS : SystemStub {
 				pn.rgb[y * dw + x] = (n == 0 || t > n) ? 0xFF000000 : (((r / n) << 16) | ((g / n) << 8) | (b / n));
 			}
 		}
-		_bottomDirty = true;
+		_bottomDirty = 2;
 	}
 	virtual bool bottomPanelTouch(int id, int x, int y, int *px, int *py) {
 		if (id < 0 || id >= kPanelMax || !_panels[id].rgb) return false;
@@ -534,7 +534,7 @@ struct SystemStub_3DS : SystemStub {
 			}
 			src -= pitch;
 		}
-		_bottomDirty = true;
+		_bottomDirty = 2;
 	}
 
 	// helpers
@@ -580,8 +580,8 @@ struct SystemStub_3DS : SystemStub {
 		}
 	}
 	void presentBottom() {
-		// the bottom screen is single-buffered: only rewrite it when it changed
-		if (!_bottomDirty) return;
+		// the bottom screen is double-buffered: after a change both buffers get repainted once
+		if (_bottomDirty <= 0) return;
 		uint8_t *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, 0, 0);
 		bool panels = false;
 		for (int i = 0; i < 2; ++i) panels |= _panels[i].rgb != 0; // the portrait does not hide the text
@@ -601,7 +601,7 @@ struct SystemStub_3DS : SystemStub {
 				}
 			}
 		}
-		_bottomDirty = false;
+		--_bottomDirty;
 	}
 
 	// audio

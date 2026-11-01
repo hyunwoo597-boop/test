@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 #ifdef BERMUDA_3DS
 	// all files live in sdmc:/3ds/bermuda/ (BERMUDA/ data, MUSIC/, BT16.TBM, saves)
 	gfxInitDefault();
-	gfxSetDoubleBuffering(GFX_BOTTOM, false);
+	gfxSetDoubleBuffering(GFX_BOTTOM, true); // redraws go to the back buffer: no tearing while the LCD scans
 	osSetSpeedupEnable(true);
 	mkdir("sdmc:/3ds", 0777);
 	mkdir("sdmc:/3ds/bermuda", 0777);
