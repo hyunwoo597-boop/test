@@ -187,7 +187,8 @@ int main(int argc, char *argv[]) {
 	free(savePath);
 	free(musicPath);
 #ifdef BERMUDA_3DS
-	romfsExit();
+	// no romfsExit(): music/data files opened from romfs:/ are still open here and are closed by
+	// the C library at exit; unmounting romfs first makes those fclose() calls crash
 	gfxExit();
 #endif
 	return 0;
