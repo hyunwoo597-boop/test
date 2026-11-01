@@ -722,7 +722,10 @@ void platformFatalError(const char *msg) {
 		gfxSwapBuffers();
 		gspWaitForVBlank();
 	}
+	// leave right away: the normal C exit path would tear down a half-running engine
+	// (audio thread, open romfs files) and crash
 	gfxExit();
+	svcExitProcess();
 }
 
 // default 3dsx main thread stack (32 KB) is tight for the recursive data scan

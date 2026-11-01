@@ -320,10 +320,14 @@ void Game::loadMOV(const char *fileName) {
 				assert(_sceneObjectsCount < NUM_SCENE_OBJECTS);
 				SceneObject *so = &_sceneObjectsTable[_sceneObjectsCount];
 				len = fp->readUint16LE();
+				memset(so->name, 0, sizeof(so->name)); // some objects have an empty name: do not keep the previous slot's name
 				fp->read(so->name, len);
-				for (int i = 0; i < _sceneObjectsCount; ++i) {
+				for (int i = 0; i < _sceneObjectsCount && so->name[0]; ++i) {
 					if (strcmp(_sceneObjectsTable[i].name, so->name) == 0) {
-						error("Duplicate object name %s", so->name);
+						// lookups use the first match, so a second object with the same name is harmless;
+						// a fatal error here ended the game on the 3DS ("Duplicate object name MENU")
+						warning("Duplicate object name %s", so->name);
+						break;
 					}
 				}
 				so->motionFrameNum = 0;

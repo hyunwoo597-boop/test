@@ -294,6 +294,10 @@ struct Game {
 	bool _hudTapEnter;
 	int _hudGaugeFrame[8], _hudGaugeX[8], _hudGaugeY[8], _hudGaugeCount, _hudGaugeW, _hudGaugeH;
 	void removeStaleMenuObjects();
+	SceneObject _menuSaveObjects[4];
+	SceneObjectMotion _menuSaveMotions[4];
+	SceneObjectFrame _menuSaveFrames[16];
+	SceneAnimation _menuSaveAnimation;
 
 	// dialogue.cpp
 	void unloadDialogueData();

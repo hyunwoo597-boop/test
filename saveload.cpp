@@ -250,7 +250,6 @@ void Game::loadState(File *f, int slot, bool switchScene) {
 	for (int i = 0; i < _sceneObjectsCount; ++i) {
 		saveOrLoad_sceneObject(_sceneObjectsTable[i]);
 	}
-	removeStaleMenuObjects();
 	n = loadInt16();
 	assert(n <= NUM_BOXES);
 	for (int i = 0; i < n; ++i) {

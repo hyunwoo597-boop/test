@@ -3,7 +3,6 @@
 #include "systemstub.h"
 
 void Game::initMenu(int num) {
-	removeStaleMenuObjects();
 	_menuOption = -1;
 	_menuHighlight = -1;
 	if (_stub->hasBottomScreen()) {
@@ -18,6 +17,12 @@ void Game::initMenu(int num) {
 	_menuObjectCount = _sceneObjectsCount;
 	_menuObjectMotion = _sceneObjectMotionsCount;
 	_menuObjectFrames = _sceneObjectFramesCount;
+	// the menu .mov is appended after the scene data; keep a copy of the slots it overwrites so the
+	// scene comes back intact (a leftover "MENU" object made later scene loads fail on 3DS)
+	memcpy(_menuSaveObjects, &_sceneObjectsTable[_menuObjectCount], sizeof(_menuSaveObjects));
+	memcpy(_menuSaveMotions, &_sceneObjectMotionsTable[_menuObjectMotion], sizeof(_menuSaveMotions));
+	memcpy(_menuSaveFrames, &_sceneObjectFramesTable[_menuObjectFrames], sizeof(_menuSaveFrames));
+	memcpy(&_menuSaveAnimation, &_animationsTable[_animationsCount], sizeof(_menuSaveAnimation));
 	const int animationsCount = _animationsCount;
 	const int state = _loadDataState;
 	char name[32];
@@ -39,6 +44,10 @@ void Game::finiMenu() {
 		_sceneObjectsCount = _menuObjectCount;
 		_sceneObjectMotionsCount = _menuObjectMotion;
 		_sceneObjectFramesCount = _menuObjectFrames;
+		memcpy(&_sceneObjectsTable[_menuObjectCount], _menuSaveObjects, sizeof(_menuSaveObjects));
+		memcpy(&_sceneObjectMotionsTable[_menuObjectMotion], _menuSaveMotions, sizeof(_menuSaveMotions));
+		memcpy(&_sceneObjectFramesTable[_menuObjectFrames], _menuSaveFrames, sizeof(_menuSaveFrames));
+		memcpy(&_animationsTable[_animationsCount], &_menuSaveAnimation, sizeof(_menuSaveAnimation));
 		const int state = _loadDataState;
 		loadWGP(_currentSceneWgp);
 		_loadDataState = state;
