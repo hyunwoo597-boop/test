@@ -1536,7 +1536,11 @@ void Game::drawStatusPanel() {
 	// the left corner icon (MODE) sits on its own row above the bars
 	const int topIcon = _hudIconFrame[0];
 	const int topW = topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.w : 0;
-	const int topH = topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.h + kGap : 0;
+	// the selected bag object goes with the corner the scene puts it in (_bagPosX), usually the left one
+	const bool bagTop = _hudIconBag && _bagPosX < 320;
+	const int bagTopW = bagTop ? getBitmapWidth(_iconBackgroundImage) : 0;
+	const int bagTopH = bagTop ? getBitmapHeight(_iconBackgroundImage) : 0;
+	const int topH = (topIcon >= 0 || bagTop) ? MAX(topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.h : 0, bagTopH) + kGap : 0;
 	if (weapon) {
 		Item it = { 1, boxW, boxH + 12, -1 };
 		items[count++] = it;
@@ -1548,7 +1552,8 @@ void Game::drawStatusPanel() {
 	if (_hudIconFrame[1] >= 0) {
 		Item it = { 0, _sceneObjectFramesTable[_hudIconFrame[1]].hdr.w, _sceneObjectFramesTable[_hudIconFrame[1]].hdr.h, _hudIconFrame[1] };
 		items[count++] = it;
-	} else if (_hudIconBag) {
+	}
+	if (_hudIconBag && _bagPosX >= 320) {
 		Item it = { 3, getBitmapWidth(_iconBackgroundImage), getBitmapHeight(_iconBackgroundImage), -1 };
 		items[count++] = it;
 	}
@@ -1561,7 +1566,7 @@ void Game::drawStatusPanel() {
 		pw += items[i].w + kGap;
 		rowH = MAX(rowH, items[i].h);
 	}
-	pw = MAX(pw, topW + 2 * kGap);
+	pw = MAX(pw, topW + bagTopW + 3 * kGap);
 	const int ph = topH + rowH + 2 * kGap;
 	if (pw * ph > allocSize) {
 		free(bits);
@@ -1577,9 +1582,16 @@ void Game::drawStatusPanel() {
 	panel.bits = bits;
 	// draws img with its top-left corner at (x, top) in panel coordinates
 #define PANEL_DRAW(x, top, img) drawObject((x), panel.h + 1 - (top) - getBitmapHeight(img), (img), &panel)
+	int tx = kGap;
 	if (topIcon >= 0) {
 		_sceneObjectFramesTable[topIcon].decode(_sceneObjectFramesTable[topIcon].data, _tempDecodeBuffer);
-		PANEL_DRAW(kGap, kGap, _tempDecodeBuffer);
+		PANEL_DRAW(tx, kGap, _tempDecodeBuffer);
+		tx += topW + kGap;
+	}
+	if (bagTop) {
+		PANEL_DRAW(tx, kGap, _iconBackgroundImage);
+		const uint8_t *obj = _bagObjectsTable[_currentBagObject].data;
+		PANEL_DRAW(tx + (bagTopW - getBitmapWidth(obj)) / 2, kGap + (bagTopH - getBitmapHeight(obj)) / 2, obj);
 	}
 	int x = kGap;
 	for (int i = 0; i < count; ++i) {
