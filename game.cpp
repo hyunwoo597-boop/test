@@ -1021,7 +1021,7 @@ void Game::redrawObjects() {
 					continue;
 				}
 				// gauge in the bottom-right corner (air / energy bars of some scenes)
-				if (hh.h <= 32 && hh.w <= 220 && so->y >= 430 && so->y + hh.h >= 468 && so->x + hh.w >= 600 && _hudExtraCount < 2) {
+				if (hh.h <= 48 && hh.w <= 260 && hh.w >= 3 * hh.h && so->x >= 400 && so->y >= 420 && so->y + hh.h >= 460 && strcasecmp(so->name, "JACK") != 0 && _hudExtraCount < 2) {
 					_hudExtraFrame[_hudExtraCount++] = so->frameNum;
 					continue;
 				}

@@ -5,6 +5,15 @@
 void Game::initMenu(int num) {
 	_menuOption = -1;
 	_menuHighlight = -1;
+	if (_stub->hasBottomScreen()) {
+		// 3DS: start on a safe entry (menu: first item, quit box: "No") and drop pending inputs
+		_menuHighlight = (num == 2) ? 1 : 0;
+		_stub->_pi.enter = false;
+		_stub->_pi.tab = false;
+		_stub->_pi.leftMouseButton = false;
+		_stub->_touchPressed = false;
+		_stub->_pi.dirMask = 0;
+	}
 	_menuObjectCount = _sceneObjectsCount;
 	_menuObjectMotion = _sceneObjectMotionsCount;
 	_menuObjectFrames = _sceneObjectFramesCount;
