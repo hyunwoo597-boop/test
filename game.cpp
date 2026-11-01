@@ -987,8 +987,14 @@ void Game::redrawObjects() {
 			if (hudToBottom) {
 				// 3DS: the small corner icons (MODE / VIEW ...) move to the bottom screen with the status bar
 				const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
-				if (hh.w <= 48 && hh.h <= 48 && so->y < 70 && (so->x < 70 || so->x >= 560)) {
-					_hudIconFrame[so->x < 70 ? 0 : 1] = so->frameNum;
+				const bool hudName = strcasecmp(so->name, "MODE") == 0 || strcasecmp(so->name, "VIEW") == 0 || strcasecmp(so->name, "FALL") == 0;
+				if ((hudName || (hh.w <= 64 && hh.h <= 64)) && so->y < 80 && (so->x < 90 || so->x >= 540)) {
+					// keep the biggest frame per corner (some corners also hold tiny placeholder objects)
+					const int side = so->x < 90 ? 0 : 1;
+					const int cur = _hudIconFrame[side];
+					if (cur < 0 || hh.w * hh.h > _sceneObjectFramesTable[cur].hdr.w * _sceneObjectFramesTable[cur].hdr.h) {
+						_hudIconFrame[side] = so->frameNum;
+					}
 					continue;
 				}
 				// gauge in the bottom-right corner (air / energy bars of some scenes)
