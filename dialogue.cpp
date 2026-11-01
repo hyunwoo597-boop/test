@@ -400,7 +400,8 @@ void Game::redrawDialogueSprite(int num) {
 				if (dy < 0 || dy >= fh) continue;
 				for (int i = 0; i < sw; ++i) {
 					const int dx = ox + i;
-					if (dx >= 0 && dx < fw) portrait[dy * fw + dx] = sp[j * sw + i];
+					// index 0 is the sprite background: keep the frame's dark backdrop (0 would show the bottom screen colour)
+					if (dx >= 0 && dx < fw && sp[j * sw + i] != 0) portrait[dy * fw + dx] = sp[j * sw + i];
 				}
 			}
 			_stub->setBottomPanel(2, portrait, fw, fh, fw);
