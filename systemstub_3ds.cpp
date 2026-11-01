@@ -19,6 +19,7 @@
 #include "mixer.h"
 #include "systemstub.h"
 #include "util.h"
+#include "bag_button_3ds.h"
 
 enum {
 	kTopW = 400,
@@ -96,6 +97,8 @@ struct SystemStub_3DS : SystemStub {
 		}
 		memset(_panels, 0, sizeof(_panels));
 		memset(_panelSplit, 0, sizeof(_panelSplit));
+		_bagButton = false;
+		_tabPulse = false;
 		_splitBuf = 0;
 		_focusX = _focusY = -1;
 		_panX = _panY = 0;
@@ -299,6 +302,15 @@ struct SystemStub_3DS : SystemStub {
 		return true;
 	}
 
+	bool _bagButton, _tabPulse;
+	enum { kBagButtonX = kBottomScreenW - 24 - 3, kBagButtonY = 2 };
+	virtual void setBagButton(bool visible) {
+		if (visible != _bagButton) {
+			_bagButton = visible;
+			_bottomDirty = 2;
+		}
+	}
+
 	virtual void setFocus(int x, int y) {
 		_focusX = x;
 		_focusY = y;
@@ -493,9 +505,13 @@ struct SystemStub_3DS : SystemStub {
 		if (down & KEY_TOUCH) {
 			touchPosition tp;
 			hidTouchRead(&tp);
-			_touchPressed = true;
-			_touchX = tp.px;
-			_touchY = tp.py;
+			if (_bagButton && tp.px >= kBagButtonX - 4 && tp.py < kBagButtonY + kBagButtonH + 4) {
+				_pi.tab = true; // same as X: open / close the bag (the game clears it when handled)
+			} else {
+				_touchPressed = true;
+				_touchX = tp.px;
+				_touchY = tp.py;
+			}
 		}
 	}
 	virtual void sleep(int duration) {
@@ -598,6 +614,14 @@ struct SystemStub_3DS : SystemStub {
 				for (int x = 0; x < pn.w; ++x) {
 					const uint32_t c = pn.rgb[y * pn.w + x];
 					if (c != 0xFF000000) putPixel(fb, pn.x + x, pn.y + y, c);
+				}
+			}
+		}
+		if (_bagButton) {
+			for (int y = 0; y < kBagButtonH; ++y) {
+				for (int x = 0; x < kBagButtonW; ++x) {
+					const uint32_t c = kBagButton[y * kBagButtonW + x];
+					if (c != 0xFF000000) putPixel(fb, kBagButtonX + x, kBagButtonY + y, c);
 				}
 			}
 		}

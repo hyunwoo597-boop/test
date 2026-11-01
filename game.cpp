@@ -116,6 +116,7 @@ void Game::restart() {
 	_previousBagObject = _currentBagObject = -1;
 	_currentPlayingSoundPriority = 0;
 	_lifeBarDisplayed2 = _lifeBarDisplayed = false;
+	_hudTouchX0 = _hudTouchY0 = 0; _hudTouchX1 = _hudTouchY1 = -1; _hudTapEnter = false;
 
 	memset(_keysPressed, 0, sizeof(_keysPressed));
 	_musicTrack = 0;
@@ -271,6 +272,22 @@ void Game::mainLoop() {
 			_gameOver = false;
 			_workaroundRaftFlySceneBug = strncmp(_currentSceneScn, "FLY", 3) == 0;
 		}
+		if (_stub->hasBottomScreen()) {
+			// tapping the action icon on the bottom status bar = pressing A (one frame)
+			if (_hudTapEnter) {
+				_hudTapEnter = false;
+				_stub->_pi.enter = false;
+			}
+			if (_stub->_touchPressed) {
+				_stub->_touchPressed = false;
+				int px, py;
+				if (_lifeBarDisplayed && _hudTouchX1 > 0 && _stub->bottomPanelTouch(0, _stub->_touchX, _stub->_touchY, &px, &py)
+					&& px >= _hudTouchX0 && px < _hudTouchX1 && py >= _hudTouchY0 && py < _hudTouchY1) {
+					_stub->_pi.enter = true;
+					_hudTapEnter = true;
+				}
+			}
+		}
 		updateKeysPressedTable();
 		updateMouseButtonsPressed();
 		runObjectsScript();
@@ -341,6 +358,9 @@ void Game::mainLoop() {
 	}
 	if (_stub->hasBottomScreen() && _state != kStateDialogue) {
 		_stub->setBottomPanel(2, 0, 0, 0, 0);
+	}
+	if (_stub->hasBottomScreen()) {
+		_stub->setBagButton(_state == kStateGame || _state == kStateBag);
 	}
 	{
 		int fx = -1, fy = -1;
@@ -1582,6 +1602,7 @@ void Game::drawStatusPanel() {
 	// draws img with its top-left corner at (x, top) in panel coordinates
 #define PANEL_DRAW(x, top, img) drawObject((x), panel.h + 1 - (top) - getBitmapHeight(img), (img), &panel)
 	int tx = kGap;
+	_hudTouchX0 = kGap; _hudTouchY0 = kGap; // top-row icons (action mode / selected object): tap = A
 	if (topIcon >= 0) {
 		_sceneObjectFramesTable[topIcon].decode(_sceneObjectFramesTable[topIcon].data, _tempDecodeBuffer);
 		PANEL_DRAW(tx, kGap, _tempDecodeBuffer);
@@ -1592,6 +1613,8 @@ void Game::drawStatusPanel() {
 		const uint8_t *obj = _bagObjectsTable[_currentBagObject].data;
 		PANEL_DRAW(tx + (bagTopW - getBitmapWidth(obj)) / 2, kGap + (bagTopH - getBitmapHeight(obj)) / 2, obj);
 	}
+	_hudTouchX1 = (topIcon >= 0 || bagTop) ? tx + bagTopW : -1;
+	_hudTouchY1 = kGap + topH;
 	int x = kGap;
 	for (int i = 0; i < count; ++i) {
 		const Item &it = items[i];

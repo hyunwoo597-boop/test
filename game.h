@@ -290,6 +290,8 @@ struct Game {
 	bool _hudIconBag;
 	int _hudExtraFrame[2];
 	int _hudExtraCount;
+	int _hudTouchX0, _hudTouchY0, _hudTouchX1, _hudTouchY1;
+	bool _hudTapEnter;
 
 	// dialogue.cpp
 	void unloadDialogueData();
