@@ -210,6 +210,8 @@ void Game::drawBagMenu(int xPosWnd, int yPosWnd) {
 
 	if (_stub->hasBottomScreen()) {
 		_stub->setBottomPanel(0, 0, 0, 0, 0);
+		// two rows on the bottom screen: weapon + actions, then objects + energy (object area starts at x 261 / 239)
+		_stub->setBottomPanelSplit(1, _isDemo ? 232 : 254);
 		_stub->setBottomPanel(1, _bagBackgroundImage.bits, _bagBackgroundImage.w + 1, _bagBackgroundImage.h + 1, _bagBackgroundImage.pitch);
 	} else {
 		_stub->copyRect(xPosWnd, yPosWnd, _bagBackgroundImage.w + 1, _bagBackgroundImage.h + 1, _bagBackgroundImage.bits, _bagBackgroundImage.pitch);

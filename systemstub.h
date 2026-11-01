@@ -67,6 +67,7 @@ struct SystemStub {
 	virtual void setFocus(int x, int y) {}
 	// bottom-screen panels (3DS): id 0 = status bar, 1 = bag window; bits = palette indices, bottom-up rows, 0 = transparent; bits 0 hides
 	virtual void setBottomPanel(int id, const uint8_t *bits, int w, int h, int pitch) {}
+	virtual void setBottomPanelSplit(int id, int splitX) {}
 	virtual bool bottomPanelTouch(int id, int x, int y, int *px, int *py) { return false; } // player position on the 640x480 screen (-1 = none), used by zoomed views
 
 	virtual void init(const char *title, int w, int h, bool fullscreen, int screenMode) = 0;

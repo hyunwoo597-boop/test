@@ -95,6 +95,8 @@ struct SystemStub_3DS : SystemStub {
 			error("SystemStub_3DS::init() unable to allocate game buffer");
 		}
 		memset(_panels, 0, sizeof(_panels));
+		memset(_panelSplit, 0, sizeof(_panelSplit));
+		_splitBuf = 0;
 		_focusX = _focusY = -1;
 		_zoomOffsetY = -1;
 		loadViewMode();
@@ -183,11 +185,41 @@ struct SystemStub_3DS : SystemStub {
 	struct Panel {
 		uint32_t *rgb; // scaled RGB, 0xFF000000 = transparent
 		int w, h, x, y, srcW, srcH, cropX, cropY;
+		int split, splitH; // >0: source was cut at column split, right part stacked under the left one
 	};
 	Panel _panels[kPanelMax];
 
+	int _panelSplit[kPanelMax];
+	uint8_t *_splitBuf;
+	virtual void setBottomPanelSplit(int id, int splitX) {
+		if (id >= 0 && id < kPanelMax) _panelSplit[id] = splitX;
+	}
 	virtual void setBottomPanel(int id, const uint8_t *bits, int w, int h, int pitch) {
 		if (id < 0 || id >= kPanelMax) return;
+		Panel &pn = _panels[id];
+		pn.split = 0;
+		const int split = _panelSplit[id];
+		if (bits && split > 0 && split < w) {
+			// two rows: [0, split) on top, [split, w) below (bottom-up rows like the engine bitmaps)
+			const int gap = 4;
+			const int cw = MAX(split, w - split), chh = 2 * h + gap;
+			_splitBuf = (uint8_t *)realloc(_splitBuf, cw * chh);
+			if (_splitBuf) {
+				memset(_splitBuf, 0, cw * chh);
+				for (int y = 0; y < h; ++y) {
+					const uint8_t *src = bits + (h - 1 - y) * pitch;
+					memcpy(_splitBuf + (chh - 1 - y) * cw, src, split);
+					memcpy(_splitBuf + (chh - 1 - (y + h + gap)) * cw, src + split, w - split);
+				}
+				setBottomPanelRaw(id, _splitBuf, cw, chh, cw);
+				pn.split = split;
+				pn.splitH = h + gap;
+				return;
+			}
+		}
+		setBottomPanelRaw(id, bits, w, h, pitch);
+	}
+	void setBottomPanelRaw(int id, const uint8_t *bits, int w, int h, int pitch) {
 		Panel &pn = _panels[id];
 		if (!bits) {
 			if (pn.rgb) {
@@ -215,7 +247,9 @@ struct SystemStub_3DS : SystemStub {
 			return;
 		}
 		const int cw = cx1 - cx0 + 1, ch = cy1 - cy0 + 1;
-		const int areaW = kBottomScreenW - 8, areaH = kPanelAreaBottom - kPanelAreaTop;
+		const bool full = (id == 1); // the bag window may use the whole bottom screen
+		const int areaTop = full ? 0 : kPanelAreaTop, areaBottom = full ? kBottomScreenH : kPanelAreaBottom;
+		const int areaW = kBottomScreenW - (full ? 0 : 8), areaH = areaBottom - areaTop;
 		int dw = cw * 2, dh = ch * 2;
 		if (dw > areaW) { dh = dh * areaW / dw; dw = areaW; }
 		if (dh > areaH) { dw = dw * areaH / dh; dh = areaH; }
@@ -226,7 +260,7 @@ struct SystemStub_3DS : SystemStub {
 		}
 		pn.w = dw; pn.h = dh; pn.srcW = cw; pn.srcH = ch; pn.cropX = cx0; pn.cropY = cy0;
 		pn.x = (kBottomScreenW - dw) / 2;
-		pn.y = kPanelAreaTop + (areaH - dh) / 2;
+		pn.y = areaTop + (areaH - dh) / 2;
 		// box filter: average the opaque source pixels covering each output pixel
 		for (int y = 0; y < dh; ++y) {
 			const int sy0 = cy0 + y * ch / dh, sy1 = MAX(sy0 + 1, cy0 + (y + 1) * ch / dh);
@@ -253,6 +287,10 @@ struct SystemStub_3DS : SystemStub {
 		if (x < pn.x || y < pn.y || x >= pn.x + pn.w || y >= pn.y + pn.h) return false;
 		*px = pn.cropX + (x - pn.x) * pn.srcW / pn.w;
 		*py = pn.cropY + (y - pn.y) * pn.srcH / pn.h;
+		if (pn.split > 0 && *py >= pn.splitH) {
+			*px += pn.split;
+			*py -= pn.splitH;
+		}
 		return true;
 	}
 
@@ -506,7 +544,7 @@ struct SystemStub_3DS : SystemStub {
 		bool panels = false;
 		for (int i = 0; i < kPanelMax; ++i) panels |= _panels[i].rgb != 0;
 		for (int y = 0; y < kBottomScreenH; ++y) {
-			const bool area = panels && y >= kPanelAreaTop && y < kPanelAreaBottom; // panels replace the help text
+			const bool area = panels && ((y >= kPanelAreaTop && y < kPanelAreaBottom) || _panels[1].rgb); // panels replace the help text
 			for (int x = 0; x < kBottomScreenW; ++x) {
 				putPixel(fb, x, y, area ? kBottomPalette[0] : _bottom[y * kBottomScreenW + x]);
 			}
