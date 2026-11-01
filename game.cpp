@@ -1533,10 +1533,10 @@ void Game::drawStatusPanel() {
 	int count = 0;
 	const int boxW = getBitmapWidth(_lifeBarImage), boxH = getBitmapHeight(_lifeBarImage);
 	const bool weapon = (_varsTable[1] == 1 || _varsTable[2] == 1);
-	if (_hudIconFrame[0] >= 0) {
-		Item it = { 0, _sceneObjectFramesTable[_hudIconFrame[0]].hdr.w, _sceneObjectFramesTable[_hudIconFrame[0]].hdr.h, _hudIconFrame[0] };
-		items[count++] = it;
-	}
+	// the left corner icon (MODE) sits on its own row above the bars
+	const int topIcon = _hudIconFrame[0];
+	const int topW = topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.w : 0;
+	const int topH = topIcon >= 0 ? _sceneObjectFramesTable[topIcon].hdr.h + kGap : 0;
 	if (weapon) {
 		Item it = { 1, boxW, boxH + 12, -1 };
 		items[count++] = it;
@@ -1556,12 +1556,13 @@ void Game::drawStatusPanel() {
 		Item it = { 0, _sceneObjectFramesTable[_hudExtraFrame[i]].hdr.w, _sceneObjectFramesTable[_hudExtraFrame[i]].hdr.h, _hudExtraFrame[i] };
 		items[count++] = it;
 	}
-	int pw = kGap, ph = 0;
+	int pw = kGap, rowH = 0;
 	for (int i = 0; i < count; ++i) {
 		pw += items[i].w + kGap;
-		ph = MAX(ph, items[i].h);
+		rowH = MAX(rowH, items[i].h);
 	}
-	ph += 2 * kGap;
+	pw = MAX(pw, topW + 2 * kGap);
+	const int ph = topH + rowH + 2 * kGap;
 	if (pw * ph > allocSize) {
 		free(bits);
 		bits = (uint8_t *)malloc(pw * ph);
@@ -1576,10 +1577,14 @@ void Game::drawStatusPanel() {
 	panel.bits = bits;
 	// draws img with its top-left corner at (x, top) in panel coordinates
 #define PANEL_DRAW(x, top, img) drawObject((x), panel.h + 1 - (top) - getBitmapHeight(img), (img), &panel)
+	if (topIcon >= 0) {
+		_sceneObjectFramesTable[topIcon].decode(_sceneObjectFramesTable[topIcon].data, _tempDecodeBuffer);
+		PANEL_DRAW(kGap, kGap, _tempDecodeBuffer);
+	}
 	int x = kGap;
 	for (int i = 0; i < count; ++i) {
 		const Item &it = items[i];
-		const int top = (ph - it.h) / 2;
+		const int top = kGap + topH + (rowH - it.h) / 2;
 		switch (it.type) {
 		case 0: // scene object frame
 			_sceneObjectFramesTable[it.frame].decode(_sceneObjectFramesTable[it.frame].data, _tempDecodeBuffer);
