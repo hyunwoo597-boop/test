@@ -309,6 +309,7 @@ struct Game {
 	void redrawDialogueTexts();
 	// second screen (3DS): Korean dialogue at native size + controls help
 	void drawBottomScreen(const char *status = 0);
+	void updateBottomVideo();
 	void drawBottomDialogue();
 	int bottomCharAdvance(const char *p, int *bytes) const;
 	int bottomDrawWrapped(uint8_t *buf, int x, int y, int maxW, const char *s, uint8_t color, bool draw);

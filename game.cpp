@@ -377,6 +377,7 @@ void Game::mainLoop() {
 		}
 		_stub->setFocus(fx, fy);
 	}
+	updateBottomVideo();
 	_stub->updateScreen();
 }
 
