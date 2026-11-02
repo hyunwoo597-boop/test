@@ -203,8 +203,8 @@ void Game::init(bool fullscreen, int screenMode) {
 	if (_isDemo) {
 		_nextState = kStateGame;
 	} else {
-		updateBottomVideo(); // the startup logos: the bottom.vid video on the bottom screen
-		updateBottomSplash();
+		updateBottomVideo();
+		applyBottomSplash(); // the startup logos: black (the intro flag stays set until the main loop)
 		playVideo("DATA/LOGO.AVI");
 		_nextState = kStateBitmap;
 	}
