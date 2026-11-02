@@ -57,6 +57,15 @@ struct SystemStub_3DS : SystemStub {
 	int16_t _soRect[kMaxStereoObjects][4];
 	int _soCount;
 	bool _stereoPending, _stereoValid, _stereoOn;
+	bool _bgChanged; // background indices or palette changed since _bgBuffer was converted
+	uint8_t _rowHasObj[480];
+	int _topDirty; // top screen buffers still to repaint (double-buffered)
+	int _lastStereoKey[6];
+	// right eye rendered on another core (New 3DS)
+	Thread _eyeThread;
+	LightEvent _eyeStart, _eyeDone;
+	volatile bool _eyeRunning;
+	int _eyeArgs[7];
 	int _w, _h;
 	Mixer *_mixer;
 
@@ -105,6 +114,11 @@ struct SystemStub_3DS : SystemStub {
 		_objMask = (uint8_t *)calloc(w * h, 1);
 		_stereoPending = _stereoValid = _stereoOn = false;
 		_soCount = 0;
+		memset(_lastStereoKey, 0, sizeof(_lastStereoKey));
+		_bgChanged = true;
+		_topDirty = 2;
+		memset(_rowHasObj, 0, sizeof(_rowHasObj));
+		startEyeThread();
 		if (!_gameBuffer) {
 			error("SystemStub_3DS::init() unable to allocate game buffer");
 		}
@@ -132,6 +146,7 @@ struct SystemStub_3DS : SystemStub {
 		_bgBuffer = 0;
 		free(_bgIndex);
 		_bgIndex = 0;
+		stopEyeThread();
 		free(_objMask);
 		_objMask = 0;
 		free(_yuvBuffer);
@@ -143,7 +158,12 @@ struct SystemStub_3DS : SystemStub {
 
 	virtual void setPalette(const uint8_t *pal, int n) {
 		for (int i = 0; i < n; ++i) {
-			_pal[i] = (pal[2] << 16) | (pal[1] << 8) | pal[0];
+			const uint32_t c = (pal[2] << 16) | (pal[1] << 8) | pal[0];
+			if (_pal[i] != c) {
+				_pal[i] = c;
+				_bgChanged = true;
+				_topDirty = 2;
+			}
 			pal += 4;
 		}
 	}
@@ -161,6 +181,7 @@ struct SystemStub_3DS : SystemStub {
 	}
 	// pixels drawn outside a full scene frame (dialogue boxes, fades) sit on the background plane
 	void flattenStereo(int x, int y, int w, int h) {
+		_topDirty = 2;
 		if (!_stereoValid || !_objMask) return;
 		for (int j = y; j < y + h; ++j) {
 			memset(_objMask + j * _w + x, 0, w);
@@ -180,7 +201,10 @@ struct SystemStub_3DS : SystemStub {
 		if (!_bgIndex) return;
 		buf += (_h - 1) * pitch; // bottom-up
 		for (int j = 0; j < _h; ++j) {
-			memcpy(_bgIndex + j * _w, buf, _w);
+			if (memcmp(_bgIndex + j * _w, buf, _w) != 0) {
+				memcpy(_bgIndex + j * _w, buf, _w);
+				_bgChanged = true;
+			}
 			buf -= pitch;
 		}
 		_stereoPending = true;
@@ -191,19 +215,29 @@ struct SystemStub_3DS : SystemStub {
 			// a whole frame: it is a scene with objects only right after setStereoBackground()
 			_stereoValid = _stereoPending && _bgBuffer && _bgIndex && _objMask;
 			_stereoPending = false;
+			_topDirty = 2;
 			if (!_stereoValid) _soCount = 0;
 			if (_stereoValid) {
+				const bool convBg = _bgChanged;
+				_bgChanged = false;
 				const uint8_t *src = buf + (h - 1) * pitch;
 				for (int j = 0; j < h; ++j, src -= pitch) {
 					const uint8_t *bg = _bgIndex + j * _w;
 					uint8_t *m = _objMask + j * _w;
-					uint32_t *d = _gameBuffer + j * _w, *b = _bgBuffer + j * _w;
+					uint32_t *d = _gameBuffer + j * _w;
+					if (convBg) {
+						uint32_t *b = _bgBuffer + j * _w;
+						for (int i = 0; i < w; ++i) b[i] = _pal[bg[i]];
+					}
 					const uint8_t own = 1 + j / 2; // default depth: the pixel's own row
+					uint8_t any = 0;
 					for (int i = 0; i < w; ++i) {
 						d[i] = _pal[src[i]];
-						b[i] = _pal[bg[i]];
-						m[i] = (src[i] != bg[i]) ? own : 0;
+						const uint8_t o = (src[i] != bg[i]) ? own : 0;
+						m[i] = o;
+						any |= o;
 					}
+					_rowHasObj[j] = any != 0;
 				}
 				// objects in drawing order (back to front): their pixels take the depth of their feet
 				for (int k = 0; k < _soCount; ++k) {
@@ -496,75 +530,145 @@ struct SystemStub_3DS : SystemStub {
 
 	// one eye of the stereo picture. eye = +1 left, -1 right. scale = 3D slider (16.16)
 	// background: inverse warp with a per-row shift; objects: forward splat with a z test, box filtered
+	// rows are rendered in bands and written column by column (the framebuffer is rotated)
+	enum { kBand = 16 };
+	struct EyeScratch {
+		uint32_t accR[kTopW], accG[kTopW], accB[kTopW];
+		int16_t accN[kTopW], accZ[kTopW];
+		uint32_t band[kBand][kTopW];
+	};
+	EyeScratch _eyeScratch[2]; // left, right (kept off the small main thread stack)
 	void renderEye(uint8_t *fb, int eye, int scale, int stepX, int stepY, int ox, int oy, int outX, int outW) {
-		static uint32_t accR[kTopW], accG[kTopW], accB[kTopW];
-		static int16_t accN[kTopW], accZ[kTopW];
+		EyeScratch &es = _eyeScratch[eye > 0 ? 0 : 1];
+		uint32_t *accR = es.accR, *accG = es.accG, *accB = es.accB;
+		int16_t *accN = es.accN, *accZ = es.accZ;
+		uint32_t (*band)[kTopW] = es.band;
 		const int maxFx = (_w - 1) << 16;
 		const int popOut = (int)(((int64_t)scale * (int)(2.5 * 65536)) >> 16);
 		const int area = (int)(((int64_t)stepX * stepY) >> 24); // source pixels per output pixel, 8.8
-		for (int y = 0; y < kTopH; ++y) {
-			int fy = oy + y * stepY + stepY / 2 - 0x8000;
-			if (fy < 0) fy = 0;
-			// background
-			const int rowC = MIN(fy >> 16, _h - 1);
-			const int dBg = (int)(((int64_t)bgDepth(rowC, scale) * stepX) >> 16) * eye;
-			int fx = ox + stepX / 2 - 0x8000 + dBg;
-			uint32_t line[kTopW];
-			for (int x = 0; x < outW; ++x, fx += stepX) {
-				line[x] = sampleBuf(_bgBuffer, fx < 0 ? 0 : (fx > maxFx ? maxFx : fx), fy);
-			}
-			// objects
-			memset(accN, 0, sizeof(int16_t) * outW);
-			const int r0 = MAX((oy + y * stepY) >> 16, 0), r1 = MIN((oy + (y + 1) * stepY - 1) >> 16, _h - 1);
-			bool any = false;
-			for (int r = r0; r <= r1; ++r) {
-				const uint8_t *m = _objMask + r * _w;
-				const uint32_t *src = _gameBuffer + r * _w;
-				for (int i = 0; i < _w; ++i) {
-					if (!m[i]) continue;
-					const int footRow = (m[i] - 1) * 2;
-					const int d = bgDepth(footRow, scale) - popOut; // in front of the ground under its feet
-					const int x = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16) - ((d * eye) >> 16);
-					if (x < 0 || x >= outW) continue;
-					const int z = d >> 10;
-					const uint32_t c = src[i];
-					if (accN[x] == 0 || z < accZ[x]) {
-						accZ[x] = z; accN[x] = 1;
-						accR[x] = (c >> 16) & 0xFF; accG[x] = (c >> 8) & 0xFF; accB[x] = c & 0xFF;
-					} else if (z == accZ[x]) {
-						++accN[x];
-						accR[x] += (c >> 16) & 0xFF; accG[x] += (c >> 8) & 0xFF; accB[x] += c & 0xFF;
+		const int edge = (bgDepth(0, scale) + 0xFFFF) >> 16; // strips only one eye sees
+		int objD[241]; // object depth by feet row / 2
+		for (int k = 1; k <= 240; ++k) objD[k] = bgDepth((k - 1) * 2, scale) - popOut;
+		for (int yb = 0; yb < kTopH; yb += kBand) {
+			const int nb = MIN((int)kBand, (int)kTopH - yb);
+			for (int by = 0; by < nb; ++by) {
+				const int y = yb + by;
+				uint32_t *line = band[by];
+				int fy = oy + y * stepY + stepY / 2 - 0x8000;
+				if (fy < 0) fy = 0;
+				// background, bilinear along the row
+				int y0 = fy >> 16;
+				if (y0 > _h - 2) y0 = _h - 2;
+				const uint32_t ay = (fy >> 8) & 0xFF;
+				const uint32_t *row0 = _bgBuffer + y0 * _w, *row1 = row0 + _w;
+				const int dBg = (int)(((int64_t)bgDepth(MIN(fy >> 16, _h - 1), scale) * stepX) >> 16) * eye;
+				int fx = ox + stepX / 2 - 0x8000 + dBg;
+				for (int x = 0; x < outW; ++x, fx += stepX) {
+					const int cfx = fx < 0 ? 0 : (fx > maxFx ? maxFx : fx);
+					int x0 = cfx >> 16;
+					if (x0 > _w - 2) x0 = _w - 2;
+					const uint32_t ax = (cfx >> 8) & 0xFF;
+					const uint32_t a = row0[x0], b = row0[x0 + 1], c = row1[x0], d = row1[x0 + 1];
+					// lerp the red/blue and green channels in parallel
+					const uint32_t t0rb = ((a & 0xFF00FF) * (256 - ax) + (b & 0xFF00FF) * ax) >> 8 & 0xFF00FF;
+					const uint32_t t0g  = ((a & 0x00FF00) * (256 - ax) + (b & 0x00FF00) * ax) >> 8 & 0x00FF00;
+					const uint32_t t1rb = ((c & 0xFF00FF) * (256 - ax) + (d & 0xFF00FF) * ax) >> 8 & 0xFF00FF;
+					const uint32_t t1g  = ((c & 0x00FF00) * (256 - ax) + (d & 0x00FF00) * ax) >> 8 & 0x00FF00;
+					line[x] = (((t0rb * (256 - ay) + t1rb * ay) >> 8) & 0xFF00FF) | (((t0g * (256 - ay) + t1g * ay) >> 8) & 0x00FF00);
+				}
+				// objects
+				const int r0 = MAX((oy + y * stepY) >> 16, 0), r1 = MIN((oy + (y + 1) * stepY - 1) >> 16, _h - 1);
+				bool any = false;
+				for (int r = r0; r <= r1; ++r) {
+					if (!_rowHasObj[r]) continue;
+					if (!any) {
+						memset(accN, 0, sizeof(int16_t) * outW);
+						any = true;
 					}
-					any = true;
+					const uint8_t *m = _objMask + r * _w;
+					const uint32_t *src = _gameBuffer + r * _w;
+					for (int i = 0; i < _w; ++i) {
+						if (!m[i]) continue;
+						const int dd = objD[m[i]];
+						const int x = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16) - ((dd * eye) >> 16);
+						if (x < 0 || x >= outW) continue;
+						const int z = dd >> 10;
+						const uint32_t cc = src[i];
+						if (accN[x] == 0 || z < accZ[x]) {
+							accZ[x] = z; accN[x] = 1;
+							accR[x] = (cc >> 16) & 0xFF; accG[x] = (cc >> 8) & 0xFF; accB[x] = cc & 0xFF;
+						} else if (z == accZ[x]) {
+							++accN[x];
+							accR[x] += (cc >> 16) & 0xFF; accG[x] += (cc >> 8) & 0xFF; accB[x] += cc & 0xFF;
+						}
+					}
+				}
+				if (any) {
+					for (int x = 0; x < outW; ++x) {
+						const int n = accN[x];
+						if (!n) continue;
+						const int tot = MAX(n << 8, area); // partially covered output pixels blend with the background
+						const int nbg = (tot - (n << 8)) >> 8, den = (tot + 128) >> 8;
+						const uint32_t bb = line[x];
+						const uint32_t r = (accR[x] + ((bb >> 16) & 0xFF) * nbg) / den;
+						const uint32_t g = (accG[x] + ((bb >> 8) & 0xFF) * nbg) / den;
+						const uint32_t bl = (accB[x] + (bb & 0xFF) * nbg) / den;
+						line[x] = (MIN(r, (uint32_t)255) << 16) | (MIN(g, (uint32_t)255) << 8) | MIN(bl, (uint32_t)255);
+					}
+				}
+				for (int x = 0; x < edge && x < outW; ++x) {
+					line[x] = 0;
+					line[outW - 1 - x] = 0;
 				}
 			}
-			if (any) {
-				for (int x = 0; x < outW; ++x) {
-					const int n = accN[x];
-					if (!n) continue;
-					const int tot = MAX(n << 8, area); // partially covered output pixels blend with the background
-					const int nb = (tot - (n << 8)) >> 8, den = (tot + 128) >> 8;
-					const uint32_t b = line[x];
-					const uint32_t r = (accR[x] + ((b >> 16) & 0xFF) * nb) / den;
-					const uint32_t g = (accG[x] + ((b >> 8) & 0xFF) * nb) / den;
-					const uint32_t bl = (accB[x] + (b & 0xFF) * nb) / den;
-					line[x] = (MIN(r, (uint32_t)255) << 16) | (MIN(g, (uint32_t)255) << 8) | MIN(bl, (uint32_t)255);
-				}
-			}
+			// write the band: for each column the rows are contiguous (bottom-up) in the framebuffer
 			for (int x = 0; x < outW; ++x) {
-				putPixel(fb, outX + x, y, line[x]);
-			}
-		}
-		// edges: hide the strips that only one eye can see (window at the screen plane)
-		const int edge = (bgDepth(0, scale) + 0xFFFF) >> 16;
-		for (int y = 0; y < kTopH; ++y) {
-			for (int x = 0; x < edge; ++x) {
-				putPixel(fb, outX + x, y, 0);
-				putPixel(fb, outX + outW - 1 - x, y, 0);
+				uint8_t *p = fb + ((outX + x) * 240 + (239 - yb)) * 3;
+				for (int by = 0; by < nb; ++by, p -= 3) {
+					const uint32_t c = band[by][x];
+					p[0] = c & 0xFF;
+					p[1] = (c >> 8) & 0xFF;
+					p[2] = (c >> 16) & 0xFF;
+				}
 			}
 		}
 		if (outX > 0) {
 			clearSideBars(fb);
+		}
+	}
+
+	// right eye worker (New 3DS: core 2)
+	static void eyeThreadEntry(void *arg) {
+		SystemStub_3DS *s = (SystemStub_3DS *)arg;
+		while (true) {
+			LightEvent_Wait(&s->_eyeStart);
+			if (!s->_eyeRunning) break;
+			const int *a = s->_eyeArgs;
+			s->renderEye(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, 0, 0), -1, a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
+			LightEvent_Signal(&s->_eyeDone);
+		}
+	}
+	void startEyeThread() {
+		_eyeThread = 0;
+		_eyeRunning = false;
+		bool n3ds = false;
+		APT_CheckNew3DS(&n3ds);
+		if (!n3ds) return;
+		LightEvent_Init(&_eyeStart, RESET_ONESHOT);
+		LightEvent_Init(&_eyeDone, RESET_ONESHOT);
+		s32 prio = 0x30;
+		svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
+		_eyeRunning = true;
+		_eyeThread = threadCreate(eyeThreadEntry, this, 64 * 1024, prio, 2, false);
+		if (!_eyeThread) _eyeRunning = false;
+	}
+	void stopEyeThread() {
+		if (_eyeThread) {
+			_eyeRunning = false;
+			LightEvent_Signal(&_eyeStart);
+			threadJoin(_eyeThread, U64_MAX);
+			threadFree(_eyeThread);
+			_eyeThread = 0;
 		}
 	}
 
@@ -579,13 +683,38 @@ struct SystemStub_3DS : SystemStub {
 		if (stereo != _stereoOn) {
 			_stereoOn = stereo;
 			gfxSet3D(stereo);
+			_topDirty = 2;
 		}
+		// nothing new on the top screen: keep both buffers, only the bottom screen may change
+		const int key[6] = { stereo ? (int)(slider * 64) : -1, _viewMode, ox, oy, stepX, stepY };
+		if (memcmp(key, _lastStereoKey, sizeof(key)) != 0) {
+			memcpy(_lastStereoKey, key, sizeof(key));
+			_topDirty = 2;
+		}
+		if (_topDirty <= 0) {
+			if (_bottomDirty > 0) {
+				// the top buffers hold the same picture: copy the shown one into the back buffer
+				presentBottom();
+				gfxFlushBuffers();
+				gfxSwapBuffers();
+			}
+			return;
+		}
+		--_topDirty;
 		if (stereo) {
 			// background from 5 px behind the screen (top) to 1 px in front (bottom), objects 2.5 px in front of
 			// the ground under their feet, per eye at full slider
 			const int scale = (int)(slider * 65536);
-			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0), 1, scale, stepX, stepY, ox, oy, outX, outW);
-			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, 0, 0), -1, scale, stepX, stepY, ox, oy, outX, outW);
+			if (_eyeThread) {
+				const int args[7] = { scale, stepX, stepY, ox, oy, outX, outW };
+				memcpy(_eyeArgs, args, sizeof(args));
+				LightEvent_Signal(&_eyeStart);
+				renderEye(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0), 1, scale, stepX, stepY, ox, oy, outX, outW);
+				LightEvent_Wait(&_eyeDone);
+			} else {
+				renderEye(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0), 1, scale, stepX, stepY, ox, oy, outX, outW);
+				renderEye(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, 0, 0), -1, scale, stepX, stepY, ox, oy, outX, outW);
+			}
 			presentBottom();
 			gfxFlushBuffers();
 			gfxSwapBuffers();
@@ -810,6 +939,7 @@ struct SystemStub_3DS : SystemStub {
 		for (int i = 0; i < 2; ++i) {
 			uint8_t *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0);
 			memset(fb, 0, kTopW * kTopH * 3);
+			_topDirty = 2;
 			presentBottom();
 			gfxFlushBuffers();
 			gfxSwapBuffers();
@@ -886,7 +1016,13 @@ struct SystemStub_3DS : SystemStub {
 		s32 prio = 0x30;
 		svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
 		_audioRunning = true;
-		_audioThread = threadCreate(audioThreadEntry, this, 32 * 1024, prio - 1, -2, false);
+		bool n3ds = false;
+		APT_CheckNew3DS(&n3ds);
+		// New 3DS: the music synth runs on core 2, away from the game and the left eye
+		_audioThread = threadCreate(audioThreadEntry, this, 32 * 1024, prio - 1, n3ds ? 2 : -2, false);
+		if (!_audioThread && n3ds) {
+			_audioThread = threadCreate(audioThreadEntry, this, 32 * 1024, prio - 1, -2, false);
+		}
 		if (!_audioThread) {
 			_audioRunning = false;
 		}
