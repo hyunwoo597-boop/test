@@ -1,0 +1,7 @@
+bannertool makebanner -i ctr/banner.png -a ctr/audio_silent.wav -o bermuda.bnr
+Created banner "bermuda.bnr".
+makerom -f cia -o bermuda.cia -rsf ctr/template.rsf -target t -exefslogo -elf bermuda.elf \
+	-icon bermuda.smdh -banner bermuda.bnr -DAPP_ENCRYPTED=false \
+	-DAPP_TITLE="Bermuda Syndrome KO" -DAPP_PRODUCT_CODE="CTR-H-BRMD" -DAPP_UNIQUE_ID="0xBE451" \
+	-DAPP_SYSTEM_MODE="80MB" -DAPP_SYSTEM_MODE_EXT="124MB" -DAPP_LOGO_ID="Nintendo" \
+	-major 0 -minor 1 -micro 7

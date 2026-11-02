@@ -1,0 +1,72 @@
+makerom: https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
+mk/makerom
+building makerom from source
+Cloning into 'pctr'...
+src/ssl_tls.c:1171:67: warning: argument 2 of type ‘unsigned char[36]’ with mismatched bound [-Warray-parameter=]
+ 1171 | void ssl_calc_verify_tls( mbedtls_ssl_context *ssl, unsigned char hash[36] )
+      |                                                     ~~~~~~~~~~~~~~^~~~~~~~
+src/ssl_tls.c:592:57: note: previously declared as ‘unsigned char *’
+  592 | static void ssl_calc_verify_tls( mbedtls_ssl_context *, unsigned char * );
+      |                                                         ^~~~~~~~~~~~~~~
+src/ssl_tls.c:1199:74: warning: argument 2 of type ‘unsigned char[32]’ with mismatched bound [-Warray-parameter=]
+ 1199 | void ssl_calc_verify_tls_sha256( mbedtls_ssl_context *ssl, unsigned char hash[32] )
+      |                                                            ~~~~~~~~~~~~~~^~~~~~~~
+src/ssl_tls.c:599:63: note: previously declared as ‘unsigned char *’
+  599 | static void ssl_calc_verify_tls_sha256( mbedtls_ssl_context *,unsigned char * );
+      |                                                               ^~~~~~~~~~~~~~~
+src/ssl_tls.c:1220:74: warning: argument 2 of type ‘unsigned char[48]’ with mismatched bound [-Warray-parameter=]
+ 1220 | void ssl_calc_verify_tls_sha384( mbedtls_ssl_context *ssl, unsigned char hash[48] )
+      |                                                            ~~~~~~~~~~~~~~^~~~~~~~
+src/ssl_tls.c:605:64: note: previously declared as ‘unsigned char *’
+  605 | static void ssl_calc_verify_tls_sha384( mbedtls_ssl_context *, unsigned char * );
+      |                                                                ^~~~~~~~~~~~~~~
+src/ssl_tls.c: In function ‘ssl_calc_verify_tls_sha384’:
+src/ssl_tls.c:1229:5: warning: ‘mbedtls_sha512_finish_ret’ accessing 64 bytes in a region of size 48 [-Wstringop-overflow=]
+ 1229 |     mbedtls_sha512_finish_ret( &sha512, hash );
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c:1229:5: note: referencing argument 2 of type ‘unsigned char[64]’
+In file included from include/mbedtls/ssl_internal.h:49,
+                 from src/ssl_tls.c:48:
+include/mbedtls/sha512.h:141:5: note: in a call to function ‘mbedtls_sha512_finish_ret’
+  141 | int mbedtls_sha512_finish_ret( mbedtls_sha512_context *ctx,
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c: In function ‘ssl_calc_finished_tls_sha384’:
+src/ssl_tls.c:6291:5: warning: ‘mbedtls_sha512_finish_ret’ accessing 64 bytes in a region of size 48 [-Wstringop-overflow=]
+ 6291 |     mbedtls_sha512_finish_ret( &sha512, padbuf );
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c:6291:5: note: referencing argument 2 of type ‘unsigned char[64]’
+include/mbedtls/sha512.h:141:5: note: in a call to function ‘mbedtls_sha512_finish_ret’
+  141 | int mbedtls_sha512_finish_ret( mbedtls_sha512_context *ctx,
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c: In function ‘ssl_calc_verify_tls_sha384’:
+src/ssl_tls.c:1229:5: warning: ‘mbedtls_sha512_finish_ret’ accessing 64 bytes in a region of size 48 [-Wstringop-overflow=]
+ 1229 |     mbedtls_sha512_finish_ret( &sha512, hash );
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c:1229:5: note: referencing argument 2 of type ‘unsigned char[64]’
+include/mbedtls/sha512.h:141:5: note: in a call to function ‘mbedtls_sha512_finish_ret’
+  141 | int mbedtls_sha512_finish_ret( mbedtls_sha512_context *ctx,
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c: In function ‘ssl_calc_finished_tls_sha384’:
+src/ssl_tls.c:6291:5: warning: ‘mbedtls_sha512_finish_ret’ accessing 64 bytes in a region of size 48 [-Wstringop-overflow=]
+ 6291 |     mbedtls_sha512_finish_ret( &sha512, padbuf );
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/ssl_tls.c:6291:5: note: referencing argument 2 of type ‘unsigned char[64]’
+include/mbedtls/sha512.h:141:5: note: in a call to function ‘mbedtls_sha512_finish_ret’
+  141 | int mbedtls_sha512_finish_ret( mbedtls_sha512_context *ctx,
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+src/utils.c: In function ‘replace_filextention’:
+src/utils.c:73:17: warning: ‘sprintf’ argument 3 overlaps destination object ‘new_name’ [-Wrestrict]
+   73 |                 sprintf(new_name, "%s%s", new_name, new_ext);
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[SETTING ERROR] Unrecognised argument '-version'
+[RESULT] Invalid arguments, see 'makerom -help'
+diasurgical/bannertool -> https://github.com/diasurgical/bannertool/releases/download/1.2.0/bannertool.zip
+bt/linux-i686/bannertool
+bt/windows-x86_64/bannertool.exe
+bt/linux-x86_64/bannertool
+bt/windows-i686/bannertool.exe
+/usr/local/bin/bannertool
+[SETTING ERROR] Unrecognised argument '-version'
+[RESULT] Invalid arguments, see 'makerom -help'
+bannertool v1.2.0
+Usage: bannertool <command> <args>
