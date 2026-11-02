@@ -192,11 +192,35 @@ void Game::loadWGP(const char *fileName) {
 	memcpy(_bitmapBuffer1.bits, _bitmapBuffer3.bits, len - offs);
 }
 
+static inline int readSprU16(const uint8_t *&p, const uint8_t *end) {
+	if (end - p < 2) {
+		p = end;
+		return 0;
+	}
+	const int v = p[0] | (p[1] << 8);
+	p += 2;
+	return v;
+}
+
 void Game::loadSPR(const char *fileName, SceneAnimation *sa) {
 	debug(DBG_RES, "Game::loadSPR('%s')", fileName);
-	FileHolder fp(_fs, fileName);
+	// read the whole sprite file once and parse it from memory: reading every field with its own call to the
+	// file layer was the slow part of a scene change on the 3DS SD card
+	uint8_t *buf = 0;
+	uint32_t size = 0;
+	{
+		FileHolder fp(_fs, fileName);
+		size = fp->size();
+		buf = (uint8_t *)malloc(size > 0 ? size : 1);
+		if (!buf) {
+			error("Unable to allocate %d bytes", size);
+		}
+		fp->read(buf, size);
+	}
+	const uint8_t *p = buf;
+	const uint8_t *end = buf + size;
 	int (*decode)(const uint8_t *, uint8_t *) = 0;
-	const int tag = fp->readUint16LE();
+	const int tag = readSprU16(p, end);
 	if (tag == 0x3553) {
 		decode = decodeLzss;
 	} else if (tag == 0x355A) {
@@ -207,7 +231,7 @@ void Game::loadSPR(const char *fileName, SceneAnimation *sa) {
 	sa->motionsCount = 0;
 	sa->firstMotionIndex = _sceneObjectMotionsCount;
 	while (1) {
-		int num = fp->readUint16LE();
+		int num = readSprU16(p, end);
 		if (num == 0) {
 			break;
 		}
@@ -218,24 +242,29 @@ void Game::loadSPR(const char *fileName, SceneAnimation *sa) {
 		motion->animNum = _animationsCount;
 		assert(_sceneObjectFramesCount + num <= NUM_SCENE_OBJECT_FRAMES);
 		for (int i = 0; i < num; ++i) {
-			int len = fp->readUint16LE();
+			int len = readSprU16(p, end);
+			if (end - p < len) {
+				len = (int)(end - p);
+			}
 			SceneObjectFrame *frame = &_sceneObjectFramesTable[_sceneObjectFramesCount];
-			frame->data = (uint8_t *)malloc(len);
+			frame->data = (uint8_t *)malloc(len > 0 ? len : 1);
 			if (!frame->data) {
 				error("Unable to allocate %d bytes", len);
 			}
-			fp->read(frame->data, len);
-			frame->hdr.num = fp->readUint16LE();
-			frame->hdr.w = fp->readUint16LE();
-			frame->hdr.h = fp->readUint16LE();
-			frame->hdr.xPos = fp->readUint16LE();
-			frame->hdr.yPos = fp->readUint16LE();
+			memcpy(frame->data, p, len);
+			p += len;
+			frame->hdr.num = readSprU16(p, end);
+			frame->hdr.w = readSprU16(p, end);
+			frame->hdr.h = readSprU16(p, end);
+			frame->hdr.xPos = readSprU16(p, end);
+			frame->hdr.yPos = readSprU16(p, end);
 			frame->decode = decode;
 			++_sceneObjectFramesCount;
 		}
 		++sa->motionsCount;
 		++_sceneObjectMotionsCount;
 	}
+	free(buf);
 }
 
 static void dumpObjectScript(SceneAnimation *sa, const char *dirPath, const char *fileName) {
