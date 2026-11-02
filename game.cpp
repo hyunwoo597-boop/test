@@ -1042,7 +1042,7 @@ void Game::redrawObjects() {
 				static uint32_t diagKeys[96];
 				static int diagCount = 0;
 				uint32_t key = (uint32_t)so->x * 73856093u ^ (uint32_t)so->y * 19349663u ^ (uint32_t)hh.w * 83492791u ^ (uint32_t)hh.h * 2654435761u;
-				for (char *c = so->name; *c; ++c) key = key * 31 + (uint8_t)*c;
+				for (const char *c = so->name; *c; ++c) key = key * 31 + (uint8_t)*c;
 				bool seen = false;
 				for (int k = 0; k < diagCount; ++k) if (diagKeys[k] == key) { seen = true; break; }
 				if (!seen && diagCount < 96) {
