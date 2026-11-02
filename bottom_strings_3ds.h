@@ -23,6 +23,8 @@ static const char *const kKoLoaded = "\xBA\xD2\xB7\xAF\xBF\xD4\xBD\xC0\xB4\xCF\x
 static const char *const kKoLoadfail = "\xBA\xD2\xB7\xAF\xBF\xC0\xB1\xE2 \xBD\xC7\xC6\xD0 (\xC0\xFA\xC0\xE5 \xC6\xC4\xC0\xCF \xBE\xF8\xC0\xBD)";
 static const char *const kKoSavefail = "\xC0\xFA\xC0\xE5 \xBD\xC7\xC6\xD0";
 static const char *const kEnTitle = "Bermuda Syndrome";
+static const char *const kKoControls = "\xC1\xB6\xC0\xDB\x20\xBC\xB3\xB8\xED";
+static const char *const kEnControls = "Controls";
 static const char *const kEnHelp[] = {
 	"D-Pad : move (zoom: Pad scrolls)",
 	"A : use / skip speech",

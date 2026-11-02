@@ -616,7 +616,7 @@ void Game::drawBottomScreen(const char *status) {
 	}
 	memset(buf, kBottomColorBg, sizeof(buf));
 	const bool ko = _textCp949 && _hangulFontData;
-	const char *title = ko ? kKoTitle : kEnTitle;
+	const char *title = _bottomHelp ? (ko ? kKoControls : kEnControls) : (ko ? kKoTitle : kEnTitle);
 	int titleW = 0;
 	for (const char *p = title; *p; ) {
 		int nb;
@@ -628,7 +628,9 @@ void Game::drawBottomScreen(const char *status) {
 	const char *const *help = ko ? kKoHelp : kEnHelp;
 	int y = 30;
 	for (int i = 0; _bottomHelp && help[i]; ++i) {
-		y = bottomDrawWrapped(buf, 14, y, kBottomScreenW - 22, help[i], kBottomColorText, true);
+		// the last line (the credit) is highlighted
+		const uint8_t hc = help[i + 1] ? kBottomColorText : kBottomColorSelected;
+		y = bottomDrawWrapped(buf, 14, y, kBottomScreenW - 22, help[i], hc, true);
 	}
 	bottomHLine(buf, 214, kBottomColorDim);
 	char line[96];
