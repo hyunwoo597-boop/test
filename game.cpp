@@ -1061,6 +1061,21 @@ void Game::redrawObjects() {
 		}
 	}
 	if (gx1 > 0) {
+		// the oxygen bubbles are small separate objects next to the gauge frame: widen the box to take them in
+		for (int i = 0; i < _sceneObjectsCount; ++i) {
+			const SceneObject *so = _sortedSceneObjectsTable[i];
+			if (so->state != 1 && so->state != 2) continue;
+			const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
+			if (hh.w > 32 || hh.h > 32 || strcasecmp(so->name, "JACK") == 0) continue;
+			if (so->x >= gx0 - 40 && so->x + hh.w <= gx1 + 40 && so->y >= gy0 - 40 && so->y + hh.h <= gy1 + 40) {
+				if (so->x < gx0) gx0 = so->x;
+				if (so->y < gy0) gy0 = so->y;
+				if (so->x + hh.w > gx1) gx1 = so->x + hh.w;
+				if (so->y + hh.h > gy1) gy1 = so->y + hh.h;
+			}
+		}
+	}
+	if (gx1 > 0) {
 		_hudGaugeW = gx1 - gx0;
 		_hudGaugeH = gy1 - gy0;
 	}
