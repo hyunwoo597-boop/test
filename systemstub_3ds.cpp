@@ -58,6 +58,10 @@ struct SystemStub_3DS : SystemStub {
 	int _soCount;
 	bool _stereoPending, _stereoValid, _stereoOn;
 	bool _bgChanged; // background indices or palette changed since _bgBuffer was converted
+	uint32_t *_objList; // object pixels sorted by row: (depth row << 20) | (y << 10) | x
+	int _objCount;
+	int _rowStart[481];
+	bool _objListDirty;
 	uint8_t _rowHasObj[480];
 	int _topDirty; // top screen buffers still to repaint (double-buffered)
 	int _lastStereoKey[6];
@@ -117,6 +121,9 @@ struct SystemStub_3DS : SystemStub {
 		memset(_lastStereoKey, 0, sizeof(_lastStereoKey));
 		_bgChanged = true;
 		_topDirty = 2;
+		_objList = (uint32_t *)malloc(sizeof(uint32_t) * 640 * 480);
+		_objCount = 0;
+		_objListDirty = true;
 		memset(_rowHasObj, 0, sizeof(_rowHasObj));
 		startEyeThread();
 		if (!_gameBuffer) {
@@ -147,6 +154,8 @@ struct SystemStub_3DS : SystemStub {
 		free(_bgIndex);
 		_bgIndex = 0;
 		stopEyeThread();
+		free(_objList);
+		_objList = 0;
 		free(_objMask);
 		_objMask = 0;
 		free(_yuvBuffer);
@@ -183,6 +192,7 @@ struct SystemStub_3DS : SystemStub {
 	void flattenStereo(int x, int y, int w, int h) {
 		_topDirty = 2;
 		if (!_stereoValid || !_objMask) return;
+		_objListDirty = true;
 		for (int j = y; j < y + h; ++j) {
 			memset(_objMask + j * _w + x, 0, w);
 			memcpy(_bgBuffer + j * _w + x, _gameBuffer + j * _w + x, w * sizeof(uint32_t));
@@ -199,6 +209,10 @@ struct SystemStub_3DS : SystemStub {
 	}
 	virtual void setStereoBackground(const uint8_t *buf, int pitch) {
 		if (!_bgIndex) return;
+		if (osGet3DSliderState() <= 0.01f) { // 3D off: no background split, plain 2D frames
+			_stereoPending = false;
+			return;
+		}
 		buf += (_h - 1) * pitch; // bottom-up
 		for (int j = 0; j < _h; ++j) {
 			if (memcmp(_bgIndex + j * _w, buf, _w) != 0) {
@@ -215,6 +229,7 @@ struct SystemStub_3DS : SystemStub {
 			// a whole frame: it is a scene with objects only right after setStereoBackground()
 			_stereoValid = _stereoPending && _bgBuffer && _bgIndex && _objMask;
 			_stereoPending = false;
+			if (!_stereoValid) _bgChanged = true; // the next 3D frame converts the background again
 			_topDirty = 2;
 			if (!_stereoValid) _soCount = 0;
 			if (_stereoValid) {
@@ -239,6 +254,7 @@ struct SystemStub_3DS : SystemStub {
 					}
 					_rowHasObj[j] = any != 0;
 				}
+				_objListDirty = true;
 				// objects in drawing order (back to front): their pixels take the depth of their feet
 				for (int k = 0; k < _soCount; ++k) {
 					const int ox = _soRect[k][0], oy = _soRect[k][1], ow = _soRect[k][2], oh = _soRect[k][3];
@@ -556,44 +572,31 @@ struct SystemStub_3DS : SystemStub {
 				uint32_t *line = band[by];
 				int fy = oy + y * stepY + stepY / 2 - 0x8000;
 				if (fy < 0) fy = 0;
-				// background, bilinear along the row
-				int y0 = fy >> 16;
-				if (y0 > _h - 2) y0 = _h - 2;
-				const uint32_t ay = (fy >> 8) & 0xFF;
-				const uint32_t *row0 = _bgBuffer + y0 * _w, *row1 = row0 + _w;
-				const int dBg = (int)(((int64_t)bgDepth(MIN(fy >> 16, _h - 1), scale) * stepX) >> 16) * eye;
+				// background: nearest sample (the picture is downscaled, so bilinear is not worth the cost on the 3DS)
+				const int rowBg = MIN(MAX(fy >> 16, 0), _h - 1);
+				const uint32_t *srow = _bgBuffer + rowBg * _w;
+				const int dBg = (int)(((int64_t)bgDepth(rowBg, scale) * stepX) >> 16) * eye;
 				int fx = ox + stepX / 2 - 0x8000 + dBg;
 				for (int x = 0; x < outW; ++x, fx += stepX) {
-					const int cfx = fx < 0 ? 0 : (fx > maxFx ? maxFx : fx);
-					int x0 = cfx >> 16;
-					if (x0 > _w - 2) x0 = _w - 2;
-					const uint32_t ax = (cfx >> 8) & 0xFF;
-					const uint32_t a = row0[x0], b = row0[x0 + 1], c = row1[x0], d = row1[x0 + 1];
-					// lerp the red/blue and green channels in parallel
-					const uint32_t t0rb = ((a & 0xFF00FF) * (256 - ax) + (b & 0xFF00FF) * ax) >> 8 & 0xFF00FF;
-					const uint32_t t0g  = ((a & 0x00FF00) * (256 - ax) + (b & 0x00FF00) * ax) >> 8 & 0x00FF00;
-					const uint32_t t1rb = ((c & 0xFF00FF) * (256 - ax) + (d & 0xFF00FF) * ax) >> 8 & 0xFF00FF;
-					const uint32_t t1g  = ((c & 0x00FF00) * (256 - ax) + (d & 0x00FF00) * ax) >> 8 & 0x00FF00;
-					line[x] = (((t0rb * (256 - ay) + t1rb * ay) >> 8) & 0xFF00FF) | (((t0g * (256 - ay) + t1g * ay) >> 8) & 0x00FF00);
+					int sx = fx >> 16;
+					if (sx < 0) sx = 0; else if (sx > _w - 1) sx = _w - 1;
+					line[x] = srow[sx];
 				}
-				// objects
+				// objects: only the object pixels of the source rows this output row covers
 				const int r0 = MAX((oy + y * stepY) >> 16, 0), r1 = MIN((oy + (y + 1) * stepY - 1) >> 16, _h - 1);
-				bool any = false;
-				for (int r = r0; r <= r1; ++r) {
-					if (!_rowHasObj[r]) continue;
-					if (!any) {
-						memset(accN, 0, sizeof(int16_t) * outW);
-						any = true;
-					}
-					const uint8_t *m = _objMask + r * _w;
-					const uint32_t *src = _gameBuffer + r * _w;
-					for (int i = 0; i < _w; ++i) {
-						if (!m[i]) continue;
-						const int dd = objD[m[i]];
+				const int k0 = _rowStart[r0], k1 = _rowStart[r1 + 1];
+				const bool any = k1 > k0;
+				if (any) {
+					memset(accN, 0, sizeof(int16_t) * outW);
+					for (int k = k0; k < k1; ++k) {
+						const uint32_t e = _objList[k];
+						const int dd = objD[e >> 20];
+						const int i = e & 1023;
+						const int r = (e >> 10) & 1023;
 						const int x = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16) - ((dd * eye) >> 16);
 						if (x < 0 || x >= outW) continue;
 						const int z = dd >> 10;
-						const uint32_t cc = src[i];
+						const uint32_t cc = _gameBuffer[r * _w + i];
 						if (accN[x] == 0 || z < accZ[x]) {
 							accZ[x] = z; accN[x] = 1;
 							accR[x] = (cc >> 16) & 0xFF; accG[x] = (cc >> 8) & 0xFF; accB[x] = cc & 0xFF;
@@ -701,6 +704,20 @@ struct SystemStub_3DS : SystemStub {
 			return;
 		}
 		--_topDirty;
+		if (stereo && _objListDirty && _objList) {
+			int n = 0;
+			for (int r = 0; r < _h; ++r) {
+				_rowStart[r] = n;
+				if (!_rowHasObj[r]) continue;
+				const uint8_t *m = _objMask + r * _w;
+				for (int i = 0; i < _w; ++i) {
+					if (m[i]) _objList[n++] = ((uint32_t)m[i] << 20) | ((uint32_t)r << 10) | (uint32_t)i;
+				}
+			}
+			_rowStart[_h] = n;
+			_objCount = n;
+			_objListDirty = false;
+		}
 		if (stereo) {
 			// background from 5 px behind the screen (top) to 1 px in front (bottom), objects 2.5 px in front of
 			// the ground under their feet, per eye at full slider
@@ -1016,13 +1033,7 @@ struct SystemStub_3DS : SystemStub {
 		s32 prio = 0x30;
 		svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
 		_audioRunning = true;
-		bool n3ds = false;
-		APT_CheckNew3DS(&n3ds);
-		// New 3DS: the music synth runs on core 2, away from the game and the left eye
-		_audioThread = threadCreate(audioThreadEntry, this, 32 * 1024, prio - 1, n3ds ? 2 : -2, false);
-		if (!_audioThread && n3ds) {
-			_audioThread = threadCreate(audioThreadEntry, this, 32 * 1024, prio - 1, -2, false);
-		}
+		_audioThread = threadCreate(audioThreadEntry, this, 32 * 1024, prio - 1, -2, false);
 		if (!_audioThread) {
 			_audioRunning = false;
 		}
