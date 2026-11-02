@@ -13,6 +13,8 @@ void Game::initMenu(int num) {
 		_stub->_pi.leftMouseButton = false;
 		_stub->_touchPressed = false;
 		_stub->_pi.dirMask = 0;
+		_bottomHelp = true;
+		drawBottomScreen();
 	}
 	_menuObjectCount = _sceneObjectsCount;
 	_menuObjectMotion = _sceneObjectMotionsCount;
@@ -55,6 +57,10 @@ void Game::finiMenu() {
 		_stub->copyRectWidescreen(kGameScreenWidth, kGameScreenHeight, _bitmapBuffer1.bits, _bitmapBuffer1.pitch);
 	}
 	_stub->showCursor(false);
+	if (_stub->hasBottomScreen()) {
+		_bottomHelp = false;
+		drawBottomScreen();
+	}
 }
 
 void Game::handleMenu() {

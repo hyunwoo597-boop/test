@@ -115,7 +115,8 @@ void Game::restart() {
 	_previousBagAction = _currentBagAction = 0;
 	_previousBagObject = _currentBagObject = -1;
 	_currentPlayingSoundPriority = 0;
-	_lifeBarDisplayed2 = _lifeBarDisplayed = false;
+	_lifeBarDisplayed2 = _lifeBarDisplayed = _stub->hasBottomScreen(); // 3DS: status bar on the bottom screen from the start
+	_bottomHelp = false;
 	_hudTouchX0 = _hudTouchY0 = 0; _hudTouchX1 = _hudTouchY1 = -1; _hudTapEnter = false;
 
 	memset(_keysPressed, 0, sizeof(_keysPressed));

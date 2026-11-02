@@ -569,6 +569,7 @@ struct Game {
 	int _currentPlayingSoundPriority;
 	bool _lifeBarDisplayed;
 	bool _lifeBarDisplayed2;
+	bool _bottomHelp; // 3DS: controls help on the bottom screen (only while the START menu is open)
 	uint8_t _keysPressed[128];
 	int _mouseButtonsPressed;
 	int _musicTrack;
