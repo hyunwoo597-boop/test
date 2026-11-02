@@ -997,6 +997,15 @@ struct SystemStub_3DS : SystemStub {
 		for (int y = 0; y < kBottomScreenH; ++y) {
 			const bool area = panels && ((y >= kPanelAreaTop && y < kPanelAreaBottom) || _panels[1].rgb); // panels replace the help text
 			for (int x = 0; x < kBottomScreenW; ++x) {
+				if (!area && _video) {
+					// the video sits in a black frame
+					const int vx = (kBottomScreenW - _videoW) / 2, vy = 29;
+					const bool inVideo = x >= vx && x < vx + _videoW && y >= vy && y < vy + _videoH;
+					if (!inVideo) {
+						putPixel(fb, x, y, 0);
+						continue;
+					}
+				}
 				if (!area && _splash) {
 					const uint8_t *p = _splash + (y * kBottomScreenW + x) * 3;
 					putPixel(fb, x, y, (p[0] << 16) | (p[1] << 8) | p[2]);
