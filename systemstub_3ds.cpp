@@ -313,6 +313,8 @@ struct SystemStub_3DS : SystemStub {
 		if (fp) {
 			const int c = fgetc(fp);
 			if (c >= '0' && c <= '4') _viewMode = c - '0';
+			if (_viewMode == 2 || _viewMode == 4) _viewMode = 3; // older builds had more zoom steps
+			if (_viewMode > 3) _viewMode = 0;
 			fclose(fp);
 		}
 	}
@@ -493,7 +495,7 @@ struct SystemStub_3DS : SystemStub {
 
 	// where the 640x480 picture goes on the 400x240 screen: source step and offset (16.16), output columns
 	void computeView(int &stepX, int &stepY, int &ox, int &oy, int &outX, int &outW) {
-		static const int kZoomStep[] = { 0x20000 /* 2.0 */, 0, 0x19999 /* 1.6 */, 0x13333 /* 1.2 */, 0x10000 /* 1.0 */ };
+		static const int kZoomStep[] = { 0x20000 /* 2.0 */, 0, 0, 0x13333 /* 1.2 */ };
 		outX = 0;
 		outW = kTopW;
 		ox = oy = 0;
@@ -505,7 +507,7 @@ struct SystemStub_3DS : SystemStub {
 		}
 		stepX = (_viewMode == 1) ? (_w << 16) / kTopW : kZoomStep[_viewMode];
 		stepY = (_viewMode == 1) ? (_h << 16) / kTopH : stepX;
-		if (_viewMode >= 2) {
+		if (_viewMode == 3) {
 			const int maxX = (_w << 16) - kTopW * stepX;
 			const int maxY = (_h << 16) - kTopH * stepY;
 			int tx = maxX / 2, ty = maxY / 2;
@@ -827,7 +829,7 @@ struct SystemStub_3DS : SystemStub {
 		} else {
 			setButton(down, up, KEY_L, _pi.ctrl);
 			if (down & KEY_R) { // R: cycle the view / zoom mode
-				_viewMode = (_viewMode + 1) % 5;
+				_viewMode = (_viewMode == 0) ? 1 : (_viewMode == 1 ? 3 : 0); // 0 -> 1 -> 3 -> 0
 				_panX = _panY = 0;
 				_zoomOffsetY = -1;
 				saveViewMode();
@@ -838,7 +840,7 @@ struct SystemStub_3DS : SystemStub {
 		if (down & KEY_ZL) _pi.load = true;
 
 		// zoomed views: the D-pad moves Jack, the Circle Pad scrolls the view
-		const bool padPans = _viewMode >= 2;
+		const bool padPans = _viewMode == 3;
 		const u32 cpad = padPans ? 0 : (KEY_CPAD_UP | KEY_CPAD_DOWN | KEY_CPAD_LEFT | KEY_CPAD_RIGHT);
 		if (padPans) {
 			// releasing a circle-pad direction that was held when entering a zoom mode must not leave Jack walking
