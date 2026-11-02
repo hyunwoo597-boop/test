@@ -1054,6 +1054,7 @@ void Game::redrawObjects() {
 					continue;
 				}
 			}
+			_stub->addStereoObject(so->x, so->y, _sceneObjectFramesTable[so->frameNum].hdr.w, _sceneObjectFramesTable[so->frameNum].hdr.h);
 			if (so->flip == 2) {
 				int16_t y = _bitmapBuffer1.h + 1 - so->y - _sceneObjectFramesTable[so->frameNum].hdr.h;
 				drawObjectVerticalFlip(so->x, y, _tempDecodeBuffer, &_bitmapBuffer1);

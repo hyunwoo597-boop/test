@@ -52,7 +52,10 @@ struct SystemStub_3DS : SystemStub {
 	// stereoscopic 3D: the scene background without objects, and which pixels are objects
 	uint32_t *_bgBuffer; // 640x480 RGB888
 	uint8_t *_bgIndex; // 640x480 palette indices (top-down), set by setStereoBackground()
-	uint8_t *_objMask; // 640x480, 1 = object pixel
+	uint8_t *_objMask; // 640x480, 0 = background, else 1 + (row of the object's feet) / 2
+	enum { kMaxStereoObjects = 128 };
+	int16_t _soRect[kMaxStereoObjects][4];
+	int _soCount;
 	bool _stereoPending, _stereoValid, _stereoOn;
 	int _w, _h;
 	Mixer *_mixer;
@@ -101,6 +104,7 @@ struct SystemStub_3DS : SystemStub {
 		_bgIndex = (uint8_t *)calloc(w * h, 1);
 		_objMask = (uint8_t *)calloc(w * h, 1);
 		_stereoPending = _stereoValid = _stereoOn = false;
+		_soCount = 0;
 		if (!_gameBuffer) {
 			error("SystemStub_3DS::init() unable to allocate game buffer");
 		}
@@ -163,6 +167,15 @@ struct SystemStub_3DS : SystemStub {
 			memcpy(_bgBuffer + j * _w + x, _gameBuffer + j * _w + x, w * sizeof(uint32_t));
 		}
 	}
+	virtual void addStereoObject(int x, int y, int w, int h) {
+		if (_soCount < kMaxStereoObjects && w > 0 && h > 0) {
+			_soRect[_soCount][0] = x;
+			_soRect[_soCount][1] = y;
+			_soRect[_soCount][2] = w;
+			_soRect[_soCount][3] = h;
+			++_soCount;
+		}
+	}
 	virtual void setStereoBackground(const uint8_t *buf, int pitch) {
 		if (!_bgIndex) return;
 		buf += (_h - 1) * pitch; // bottom-up
@@ -178,18 +191,34 @@ struct SystemStub_3DS : SystemStub {
 			// a whole frame: it is a scene with objects only right after setStereoBackground()
 			_stereoValid = _stereoPending && _bgBuffer && _bgIndex && _objMask;
 			_stereoPending = false;
+			if (!_stereoValid) _soCount = 0;
 			if (_stereoValid) {
 				const uint8_t *src = buf + (h - 1) * pitch;
 				for (int j = 0; j < h; ++j, src -= pitch) {
 					const uint8_t *bg = _bgIndex + j * _w;
 					uint8_t *m = _objMask + j * _w;
 					uint32_t *d = _gameBuffer + j * _w, *b = _bgBuffer + j * _w;
+					const uint8_t own = 1 + j / 2; // default depth: the pixel's own row
 					for (int i = 0; i < w; ++i) {
 						d[i] = _pal[src[i]];
 						b[i] = _pal[bg[i]];
-						m[i] = src[i] != bg[i];
+						m[i] = (src[i] != bg[i]) ? own : 0;
 					}
 				}
+				// objects in drawing order (back to front): their pixels take the depth of their feet
+				for (int k = 0; k < _soCount; ++k) {
+					const int ox = _soRect[k][0], oy = _soRect[k][1], ow = _soRect[k][2], oh = _soRect[k][3];
+					if (oh > _h / 2) continue; // big overlays (water, foliage layers) follow the background slope
+					const int x0 = MAX(ox, 0), x1 = MIN(ox + ow, _w), y0 = MAX(oy, 0), y1 = MIN(oy + oh, _h);
+					const uint8_t foot = 1 + MIN(oy + oh - 1, _h - 1) / 2;
+					for (int j = y0; j < y1; ++j) {
+						uint8_t *m = _objMask + j * _w;
+						for (int i = x0; i < x1; ++i) {
+							if (m[i]) m[i] = foot;
+						}
+					}
+				}
+				_soCount = 0;
 				return;
 			}
 		}
@@ -459,29 +488,79 @@ struct SystemStub_3DS : SystemStub {
 		}
 	}
 
-	// one eye of the stereo picture: background pushed behind the screen, objects in front of it
-	// eye = +1 left, -1 right; bgShift/objShift in output pixels (16.16)
-	void renderEye(uint8_t *fb, int eye, int bgShift, int objShift, int stepX, int stepY, int ox, int oy, int outX, int outW) {
-		const int dBg = (int)(((int64_t)bgShift * stepX) >> 16) * eye;
-		const int dObj = (int)(((int64_t)objShift * stepX) >> 16) * eye;
+	// depth in output pixels per eye (16.16), positive = behind the screen, for a 640x480 row
+	// background: far at the top of the picture, at the screen plane near the bottom
+	inline int bgDepth(int row, int scale) const {
+		return (int)(((int64_t)scale * (5 * 65536 - (6 * 65536 / 479) * row)) >> 16);
+	}
+
+	// one eye of the stereo picture. eye = +1 left, -1 right. scale = 3D slider (16.16)
+	// background: inverse warp with a per-row shift; objects: forward splat with a z test, box filtered
+	void renderEye(uint8_t *fb, int eye, int scale, int stepX, int stepY, int ox, int oy, int outX, int outW) {
+		static uint32_t accR[kTopW], accG[kTopW], accB[kTopW];
+		static int16_t accN[kTopW], accZ[kTopW];
 		const int maxFx = (_w - 1) << 16;
+		const int popOut = (int)(((int64_t)scale * (int)(2.5 * 65536)) >> 16);
+		const int area = (int)(((int64_t)stepX * stepY) >> 24); // source pixels per output pixel, 8.8
 		for (int y = 0; y < kTopH; ++y) {
 			int fy = oy + y * stepY + stepY / 2 - 0x8000;
 			if (fy < 0) fy = 0;
-			const uint8_t *mrow = _objMask + MIN(fy >> 16, _h - 1) * _w;
-			int fx = ox + stepX / 2 - 0x8000;
+			// background
+			const int rowC = MIN(fy >> 16, _h - 1);
+			const int dBg = (int)(((int64_t)bgDepth(rowC, scale) * stepX) >> 16) * eye;
+			int fx = ox + stepX / 2 - 0x8000 + dBg;
+			uint32_t line[kTopW];
 			for (int x = 0; x < outW; ++x, fx += stepX) {
-				int sx = fx - dObj; // objects: left eye sees them shifted right
-				if (sx < 0) sx = 0; else if (sx > maxFx) sx = maxFx;
-				uint32_t c;
-				if (mrow[(sx + 0x8000) >> 16 < _w ? (sx + 0x8000) >> 16 : _w - 1]) {
-					c = sampleBuf(_gameBuffer, sx, fy);
-				} else {
-					int bx = fx + dBg; // background: left eye sees it shifted left
-					if (bx > maxFx) bx = maxFx;
-					c = sampleBuf(_bgBuffer, bx, fy);
+				line[x] = sampleBuf(_bgBuffer, fx < 0 ? 0 : (fx > maxFx ? maxFx : fx), fy);
+			}
+			// objects
+			memset(accN, 0, sizeof(int16_t) * outW);
+			const int r0 = MAX((oy + y * stepY) >> 16, 0), r1 = MIN((oy + (y + 1) * stepY - 1) >> 16, _h - 1);
+			bool any = false;
+			for (int r = r0; r <= r1; ++r) {
+				const uint8_t *m = _objMask + r * _w;
+				const uint32_t *src = _gameBuffer + r * _w;
+				for (int i = 0; i < _w; ++i) {
+					if (!m[i]) continue;
+					const int footRow = (m[i] - 1) * 2;
+					const int d = bgDepth(footRow, scale) - popOut; // in front of the ground under its feet
+					const int x = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16) - ((d * eye) >> 16);
+					if (x < 0 || x >= outW) continue;
+					const int z = d >> 10;
+					const uint32_t c = src[i];
+					if (accN[x] == 0 || z < accZ[x]) {
+						accZ[x] = z; accN[x] = 1;
+						accR[x] = (c >> 16) & 0xFF; accG[x] = (c >> 8) & 0xFF; accB[x] = c & 0xFF;
+					} else if (z == accZ[x]) {
+						++accN[x];
+						accR[x] += (c >> 16) & 0xFF; accG[x] += (c >> 8) & 0xFF; accB[x] += c & 0xFF;
+					}
+					any = true;
 				}
-				putPixel(fb, outX + x, y, c);
+			}
+			if (any) {
+				for (int x = 0; x < outW; ++x) {
+					const int n = accN[x];
+					if (!n) continue;
+					const int tot = MAX(n << 8, area); // partially covered output pixels blend with the background
+					const int nb = (tot - (n << 8)) >> 8, den = (tot + 128) >> 8;
+					const uint32_t b = line[x];
+					const uint32_t r = (accR[x] + ((b >> 16) & 0xFF) * nb) / den;
+					const uint32_t g = (accG[x] + ((b >> 8) & 0xFF) * nb) / den;
+					const uint32_t bl = (accB[x] + (b & 0xFF) * nb) / den;
+					line[x] = (MIN(r, 255u) << 16) | (MIN(g, 255u) << 8) | MIN(bl, 255u);
+				}
+			}
+			for (int x = 0; x < outW; ++x) {
+				putPixel(fb, outX + x, y, line[x]);
+			}
+		}
+		// edges: hide the strips that only one eye can see (window at the screen plane)
+		const int edge = (bgDepth(0, scale) + 0xFFFF) >> 16;
+		for (int y = 0; y < kTopH; ++y) {
+			for (int x = 0; x < edge; ++x) {
+				putPixel(fb, outX + x, y, 0);
+				putPixel(fb, outX + outW - 1 - x, y, 0);
 			}
 		}
 		if (outX > 0) {
@@ -502,10 +581,11 @@ struct SystemStub_3DS : SystemStub {
 			gfxSet3D(stereo);
 		}
 		if (stereo) {
-			// up to 3 px behind the screen for the background, 2 px in front of it for objects (per eye)
-			const int bgShift = (int)(slider * 3.0f * 65536), objShift = (int)(slider * 2.0f * 65536);
-			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0), 1, bgShift, objShift, stepX, stepY, ox, oy, outX, outW);
-			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, 0, 0), -1, bgShift, objShift, stepX, stepY, ox, oy, outX, outW);
+			// background from 5 px behind the screen (top) to 1 px in front (bottom), objects 2.5 px in front of
+			// the ground under their feet, per eye at full slider
+			const int scale = (int)(slider * 65536);
+			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0), 1, scale, stepX, stepY, ox, oy, outX, outW);
+			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, 0, 0), -1, scale, stepX, stepY, ox, oy, outX, outW);
 			presentBottom();
 			gfxFlushBuffers();
 			gfxSwapBuffers();
