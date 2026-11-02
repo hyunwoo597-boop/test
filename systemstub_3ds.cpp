@@ -552,6 +552,7 @@ struct SystemStub_3DS : SystemStub {
 		uint32_t accR[kTopW], accG[kTopW], accB[kTopW];
 		int16_t accN[kTopW], accZ[kTopW];
 		uint32_t band[kBand][kTopW];
+		int xOfCol[640];
 	};
 	EyeScratch _eyeScratch[2]; // left, right (kept off the small main thread stack)
 	void renderEye(uint8_t *fb, int eye, int scale, int stepX, int stepY, int ox, int oy, int outX, int outW) {
@@ -563,6 +564,11 @@ struct SystemStub_3DS : SystemStub {
 		const int popOut = (int)(((int64_t)scale * (int)(2.5 * 65536)) >> 16);
 		const int area = (int)(((int64_t)stepX * stepY) >> 24); // source pixels per output pixel, 8.8
 		const int edge = (bgDepth(0, scale) + 0xFFFF) >> 16; // strips only one eye sees
+		// source column -> output column (before the eye shift), once per frame: the 64-bit divide is slow on the 3DS
+		int *xOfCol = _eyeScratch[eye > 0 ? 0 : 1].xOfCol;
+		for (int i = 0; i < _w; ++i) {
+			xOfCol[i] = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16);
+		}
 		int objD[241]; // object depth by feet row / 2
 		for (int k = 1; k <= 240; ++k) objD[k] = bgDepth((k - 1) * 2, scale) - popOut;
 		for (int yb = 0; yb < kTopH; yb += kBand) {
@@ -593,7 +599,7 @@ struct SystemStub_3DS : SystemStub {
 						const int dd = objD[e >> 20];
 						const int i = e & 1023;
 						const int r = (e >> 10) & 1023;
-						const int x = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16) - ((dd * eye) >> 16);
+						const int x = xOfCol[i] - ((dd * eye) >> 16);
 						if (x < 0 || x >= outW) continue;
 						const int z = dd >> 10;
 						const uint32_t cc = _gameBuffer[r * _w + i];
