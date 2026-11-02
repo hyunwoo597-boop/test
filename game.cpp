@@ -28,6 +28,8 @@ static bool isStereoPopObject(const char *name) {
 		// enemies and animals
 		"aln", "als", "ant", "bat", "bird", "coel", "crocodile", "dino", "dipl", "dil", "fly", "gallimim", "gar",
 		"gol", "hidra", "pter", "ptero", "ptr", "scorpio", "spider", "stego", "t_rex", "tarbosaur", "varan", "velo", "worm",
+		// dinosaurs (scene names: Igo, Acro, Ird, Hup, Eup, Crt, Kht, Kent, Tor, Den, Penta, Dim, Ramfor, Alean)
+		"igo", "acro", "ird", "hup", "eup", "crt", "kht", "kent", "tor", "den", "penta", "dim", "ramfor", "alean",
 		// usable objects
 		"axt", "ball", "box", "button", "cage", "door", "handle", "horn", "key", "lamp", "lift", "liana", "net", "rope",
 		"raft", "switch",
