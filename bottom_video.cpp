@@ -59,8 +59,8 @@ static bool loadBottomVideo() {
 static bool _bottomIntro = true;
 
 void Game::updateBottomVideo() {
-	// bottom.vid: only the startup logo movies
-	const bool show = _stub->hasBottomScreen() && _bottomIntro;
+	// bottom.vid is off for now: it does not play on the bottom screen yet (the startup logos show a black screen)
+	const bool show = false;
 	if (!show) {
 		if (_bvShown) {
 			_stub->setBottomVideo(0, 0, 0);
@@ -92,7 +92,7 @@ void Game::updateBottomVideo() {
 
 // 3DS: a picture (bottom_splash.jpg, 320x240) on the bottom screen during the opening scenes
 // The menus keep the bottom screen for their own panels.
-static bool _bsShown;
+
 
 static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 	static const char *paths[] = { "bottom_splash.jpg", "romfs:/bottom_splash.jpg", 0 };
@@ -121,27 +121,44 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 	return false;
 }
 
+// 0 = off, 1 = black (startup logos), 2 = the picture
+static int _bsMode;
+
 void Game::updateBottomSplash() {
-	// bottom_splash.jpg: the title screen and its menu (the controls list keeps the bottom screen), the opening
-	// scenes, and the gameplay when the status bar is hidden (L)
+	// the title screen and its menu (the controls list keeps the bottom screen), the opening scenes, and the
+	// gameplay when the status bar is hidden (L)
 	const bool menu = (_state == kStateMenu1 || _state == kStateMenu2) && !_bottomHelp;
-	const bool show = _stub->hasBottomScreen() && (_state == kStateBitmap || menu
-		|| (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed)));
+	int mode = 0;
+	if (_stub->hasBottomScreen()) {
+		if (_bottomIntro) {
+			mode = 1;
+		} else if (_state == kStateBitmap || menu || (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed))) {
+			mode = 2;
+		}
+	}
 	_bottomIntro = false;
-	if (show == _bsShown) {
+	if (mode == _bsMode) {
 		return;
 	}
-	_bsShown = show;
-	if (!show) {
+	_bsMode = mode;
+	if (mode == 0) {
 		_stub->setBottomSplash(0, 0, 0);
 		return;
 	}
 	_stub->setBottomPanel(0, 0, 0, 0, 0);
 	_stub->setBottomPanel(1, 0, 0, 0, 0);
-	// for now the picture sections are a plain black screen (the picture file is kept for later)
-	uint8_t *black = (uint8_t *)calloc(320 * 240 * 3, 1);
-	if (black) {
-		_stub->setBottomSplash(black, 320, 240);
-		free(black);
+	if (mode == 1) {
+		uint8_t *black = (uint8_t *)calloc(320 * 240 * 3, 1);
+		if (black) {
+			_stub->setBottomSplash(black, 320, 240);
+			free(black);
+		}
+		return;
+	}
+	uint8_t *rgb = 0;
+	int w = 0, h = 0;
+	if (loadBottomSplashFile(&rgb, &w, &h)) {
+		_stub->setBottomSplash(rgb, w, h);
+		stbi_image_free(rgb);
 	}
 }
