@@ -3,6 +3,7 @@
  * Copyright (C) 2007-2011 Gregory Montoir
  */
 
+#include <strings.h>
 #include <sys/param.h>
 #include "decoder.h"
 #include "file.h"
@@ -202,20 +203,88 @@ static inline int readSprU16(const uint8_t *&p, const uint8_t *end) {
 	return v;
 }
 
+// the raw sprite files of the recent scenes stay in memory: a scene that uses the same characters again does
+// not read them from the SD card
+static const uint32_t kSprCacheLimit = 10 * 1024 * 1024;
+static const int kSprCacheSlots = 16;
+struct SprCacheEntry {
+	char name[160];
+	uint8_t *data;
+	uint32_t size;
+	uint32_t used;
+};
+static SprCacheEntry _sprCache[kSprCacheSlots];
+static uint32_t _sprCacheTotal;
+static uint32_t _sprCacheTick;
+
+static const uint8_t *sprCacheGet(const char *name, uint32_t *size) {
+	for (int i = 0; i < kSprCacheSlots; ++i) {
+		SprCacheEntry *e = &_sprCache[i];
+		if (e->data && strcasecmp(e->name, name) == 0) {
+			e->used = ++_sprCacheTick;
+			*size = e->size;
+			return e->data;
+		}
+	}
+	return 0;
+}
+
+// returns true when the cache took the buffer
+static bool sprCachePut(const char *name, uint8_t *data, uint32_t size) {
+	if (size > kSprCacheLimit || strlen(name) >= sizeof(_sprCache[0].name)) {
+		return false;
+	}
+	while (1) {
+		int freeSlot = -1, oldest = -1;
+		for (int i = 0; i < kSprCacheSlots; ++i) {
+			SprCacheEntry *e = &_sprCache[i];
+			if (!e->data) {
+				if (freeSlot < 0) freeSlot = i;
+			} else if (oldest < 0 || e->used < _sprCache[oldest].used) {
+				oldest = i;
+			}
+		}
+		if (freeSlot >= 0 && _sprCacheTotal + size <= kSprCacheLimit) {
+			SprCacheEntry *e = &_sprCache[freeSlot];
+			strcpy(e->name, name);
+			e->data = data;
+			e->size = size;
+			e->used = ++_sprCacheTick;
+			_sprCacheTotal += size;
+			return true;
+		}
+		if (oldest < 0) {
+			return false;
+		}
+		SprCacheEntry *e = &_sprCache[oldest];
+		_sprCacheTotal -= e->size;
+		free(e->data);
+		e->data = 0;
+		e->size = 0;
+	}
+}
+
 void Game::loadSPR(const char *fileName, SceneAnimation *sa) {
 	debug(DBG_RES, "Game::loadSPR('%s')", fileName);
-	// read the whole sprite file once and parse it from memory: reading every field with its own call to the
-	// file layer was the slow part of a scene change on the 3DS SD card
-	uint8_t *buf = 0;
+	// the file is read once (or taken from the cache) and parsed from memory: reading every field with its own
+	// call to the file layer was the slow part of a scene change on the 3DS SD card
 	uint32_t size = 0;
-	{
+	const uint8_t *buf = sprCacheGet(fileName, &size);
+	bool owned = false;
+	if (!buf) {
 		FileHolder fp(_fs, fileName);
 		size = fp->size();
-		buf = (uint8_t *)malloc(size > 0 ? size : 1);
-		if (!buf) {
+		uint8_t *data = (uint8_t *)malloc(size > 0 ? size : 1);
+		if (!data) {
 			error("Unable to allocate %d bytes", size);
 		}
-		fp->read(buf, size);
+		fp->read(data, size);
+		if (sprCachePut(fileName, data, size)) {
+			buf = data;
+		} else {
+			buf = data;
+			owned = true;
+		}
 	}
 	const uint8_t *p = buf;
 	const uint8_t *end = buf + size;
@@ -264,7 +333,9 @@ void Game::loadSPR(const char *fileName, SceneAnimation *sa) {
 		++sa->motionsCount;
 		++_sceneObjectMotionsCount;
 	}
-	free(buf);
+	if (owned) {
+		free((void *)buf);
+	}
 }
 
 static void dumpObjectScript(SceneAnimation *sa, const char *dirPath, const char *fileName) {
