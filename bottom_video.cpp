@@ -138,10 +138,10 @@ void Game::updateBottomSplash() {
 	}
 	_stub->setBottomPanel(0, 0, 0, 0, 0);
 	_stub->setBottomPanel(1, 0, 0, 0, 0);
-	uint8_t *rgb = 0;
-	int w = 0, h = 0;
-	if (loadBottomSplashFile(&rgb, &w, &h)) {
-		_stub->setBottomSplash(rgb, w, h);
-		stbi_image_free(rgb);
+	// for now the picture sections are a plain black screen (the picture file is kept for later)
+	uint8_t *black = (uint8_t *)calloc(320 * 240 * 3, 1);
+	if (black) {
+		_stub->setBottomSplash(black, 320, 240);
+		free(black);
 	}
 }
