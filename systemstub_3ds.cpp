@@ -548,7 +548,7 @@ struct SystemStub_3DS : SystemStub {
 					const uint32_t r = (accR[x] + ((b >> 16) & 0xFF) * nb) / den;
 					const uint32_t g = (accG[x] + ((b >> 8) & 0xFF) * nb) / den;
 					const uint32_t bl = (accB[x] + (b & 0xFF) * nb) / den;
-					line[x] = (MIN(r, 255u) << 16) | (MIN(g, 255u) << 8) | MIN(bl, 255u);
+					line[x] = (MIN(r, (uint32_t)255) << 16) | (MIN(g, (uint32_t)255) << 8) | MIN(bl, (uint32_t)255);
 				}
 			}
 			for (int x = 0; x < outW; ++x) {
