@@ -59,11 +59,8 @@ static bool loadBottomVideo() {
 static bool _bottomIntro = true;
 
 void Game::updateBottomVideo() {
-	// bottom.vid: the startup logos, the title screen and its menu, the opening scenes, and the gameplay with the
-	// status bar hidden (L); the controls list keeps the bottom screen
-	const bool menu = (_state == kStateMenu1 || _state == kStateMenu2) && !_bottomHelp;
-	const bool show = _stub->hasBottomScreen() && (_bottomIntro || _state == kStateBitmap || menu
-		|| (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed)));
+	// bottom.vid: only the startup logo movies
+	const bool show = _stub->hasBottomScreen() && _bottomIntro;
 	if (!show) {
 		if (_bvShown) {
 			_stub->setBottomVideo(0, 0, 0);
@@ -125,8 +122,11 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 }
 
 void Game::updateBottomSplash() {
-	// bottom_splash.jpg is no longer shown: the bottom.vid video takes these screens
-	const bool show = false;
+	// bottom_splash.jpg: the title screen and its menu (the controls list keeps the bottom screen), the opening
+	// scenes, and the gameplay when the status bar is hidden (L)
+	const bool menu = (_state == kStateMenu1 || _state == kStateMenu2) && !_bottomHelp;
+	const bool show = _stub->hasBottomScreen() && (_state == kStateBitmap || menu
+		|| (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed)));
 	_bottomIntro = false;
 	if (show == _bsShown) {
 		return;
