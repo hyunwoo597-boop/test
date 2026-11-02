@@ -117,8 +117,11 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 	return false;
 }
 
+static bool _bsStartup = true; // until the first frame of the main loop: the startup logo movies
+
 void Game::updateBottomSplash() {
-	const bool show = _stub->hasBottomScreen() && (_state == kStateBitmap || (_state == kStateGame && _sceneNumber <= -1000));
+	const bool show = _stub->hasBottomScreen() && (_bsStartup || _state == kStateBitmap || (_state == kStateGame && _sceneNumber <= -1000));
+	_bsStartup = false;
 	if (show == _bsShown) {
 		return;
 	}

@@ -200,6 +200,7 @@ void Game::init(bool fullscreen, int screenMode) {
 	if (_isDemo) {
 		_nextState = kStateGame;
 	} else {
+		updateBottomSplash(); // the startup logos show the picture on the bottom screen too
 		playVideo("DATA/LOGO.AVI");
 		_nextState = kStateBitmap;
 	}
