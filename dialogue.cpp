@@ -626,9 +626,9 @@ void Game::drawBottomScreen(const char *status) {
 	bottomDrawWrapped(buf, (kBottomScreenW - titleW) / 2, 6, kBottomScreenW, title, kBottomColorTitle, true);
 	bottomHLine(buf, 26, kBottomColorDim);
 	const char *const *help = ko ? kKoHelp : kEnHelp;
-	int y = 32;
+	int y = 30;
 	for (int i = 0; _bottomHelp && help[i]; ++i) {
-		y = bottomDrawWrapped(buf, 14, y, kBottomScreenW - 22, help[i], kBottomColorText, true) + 2;
+		y = bottomDrawWrapped(buf, 14, y, kBottomScreenW - 22, help[i], kBottomColorText, true);
 	}
 	bottomHLine(buf, 214, kBottomColorDim);
 	char line[96];

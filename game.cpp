@@ -404,6 +404,7 @@ void Game::mainLoop() {
 	}
 	updateBottomVideo();
 	updateBottomSplash();
+	_stub->setForceOriginal(_state == kStateMenu1 || _state == kStateMenu2);
 	_stub->updateScreen();
 }
 

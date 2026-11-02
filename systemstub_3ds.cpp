@@ -134,6 +134,7 @@ struct SystemStub_3DS : SystemStub {
 		_bagButton = false;
 		_video = 0; _videoW = _videoH = 0;
 		_splash = 0;
+		_forceOriginal = false;
 		_tabPulse = false;
 		_splitBuf = 0;
 		_focusX = _focusY = -1;
@@ -444,6 +445,9 @@ struct SystemStub_3DS : SystemStub {
 	enum { kBagButtonX = kBottomScreenW - 24 - 3, kBagButtonY = 2 };
 	uint8_t *_video; int _videoW, _videoH;
 	uint8_t *_splash;
+	bool _forceOriginal;
+	int effMode() const { return _forceOriginal ? 0 : _viewMode; }
+	virtual void setForceOriginal(bool on) { _forceOriginal = on; }
 	virtual void setBottomSplash(const uint8_t *rgb, int w, int h) {
 		if (!rgb || w != kBottomScreenW || h != kBottomScreenH) {
 			if (_splash) {
@@ -517,15 +521,15 @@ struct SystemStub_3DS : SystemStub {
 		outX = 0;
 		outW = kTopW;
 		ox = oy = 0;
-		if (_viewMode == 0) {
+		if (effMode() == 0) {
 			stepX = stepY = kZoomStep[0];
 			outX = 40;
 			outW = 320;
 			return;
 		}
-		stepX = (_viewMode == 1) ? (_w << 16) / kTopW : kZoomStep[_viewMode];
-		stepY = (_viewMode == 1) ? (_h << 16) / kTopH : stepX;
-		if (_viewMode == 3) {
+		stepX = (effMode() == 1) ? (_w << 16) / kTopW : kZoomStep[effMode()];
+		stepY = (effMode() == 1) ? (_h << 16) / kTopH : stepX;
+		if (effMode() == 3) {
 			const int maxX = (_w << 16) - kTopW * stepX;
 			const int maxY = (_h << 16) - kTopH * stepY;
 			int tx = maxX / 2, ty = maxY / 2;
@@ -711,7 +715,7 @@ struct SystemStub_3DS : SystemStub {
 			_topDirty = 2;
 		}
 		// nothing new on the top screen: keep both buffers, only the bottom screen may change
-		const int key[6] = { stereo ? (int)(slider * 64) : -1, _viewMode, ox, oy, stepX, stepY };
+		const int key[6] = { stereo ? (int)(slider * 64) : -1, effMode(), ox, oy, stepX, stepY };
 		if (memcmp(key, _lastStereoKey, sizeof(key)) != 0) {
 			memcpy(_lastStereoKey, key, sizeof(key));
 			_topDirty = 2;
@@ -760,7 +764,7 @@ struct SystemStub_3DS : SystemStub {
 			return;
 		}
 		uint8_t *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0);
-		if (_viewMode == 0) {
+		if (effMode() == 0) {
 			// 2x2 box filter 640x480 -> 320x240, centered (40px side bars)
 			for (int y = 0; y < kTopH; ++y) {
 				const uint32_t *s0 = _gameBuffer + (y * 2) * _w;
