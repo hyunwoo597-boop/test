@@ -60,7 +60,7 @@ static bool _bottomIntro = true;
 
 void Game::updateBottomVideo() {
 	// bottom.vid: only on the title screen (the BERMUDA SYNDROME logo, no menu yet)
-	const bool show = _stub->hasBottomScreen() && _state == kStateBitmap;
+	const bool show = _stub->hasBottomScreen() && _state == kStateBitmap && !_bsMovie;
 	if (!show) {
 		if (_bvShown) {
 			_stub->setBottomVideo(0, 0, 0);
@@ -123,20 +123,22 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 
 // 0 = off, 1 = black (startup logos), 2 = the picture
 static int _bsMode;
+static bool _bsMovie; // an AVI movie is playing: the bottom screen follows the movie, not the game state
 
-void Game::updateBottomSplash() {
+void Game::applyBottomSplash() {
 	// the menu (the controls list keeps the bottom screen), the opening scenes, and the gameplay when the status
 	// bar is hidden (L); the title screen itself shows bottom.vid
 	const bool menu = (_state == kStateMenu1 || _state == kStateMenu2) && !_bottomHelp;
 	int mode = 0;
 	if (_stub->hasBottomScreen()) {
-		if (_bottomIntro) {
+		if (_bsMovie) {
+			mode = _bottomIntro ? 1 : 2;
+		} else if (_bottomIntro) {
 			mode = 1;
 		} else if (menu || (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed))) {
 			mode = 2;
 		}
 	}
-	_bottomIntro = false;
 	if (mode == _bsMode) {
 		return;
 	}
@@ -161,4 +163,19 @@ void Game::updateBottomSplash() {
 		_stub->setBottomSplash(rgb, w, h);
 		stbi_image_free(rgb);
 	}
+}
+
+void Game::updateBottomSplash() {
+	applyBottomSplash();
+	_bottomIntro = false;
+}
+
+// AVI movies (the logos, the opening movies) take over the bottom screen: no video, the logos are black,
+// the other movies show the picture
+void Game::bottomMovie(bool on) {
+	_bsMovie = on;
+	_bsMode = -1;
+	_bvShown = false;
+	_stub->setBottomVideo(0, 0, 0);
+	applyBottomSplash();
 }

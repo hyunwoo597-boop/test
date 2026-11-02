@@ -311,6 +311,8 @@ struct Game {
 	void drawBottomScreen(const char *status = 0);
 	void updateBottomVideo();
 	void updateBottomSplash();
+	void applyBottomSplash();
+	void bottomMovie(bool on);
 	void drawBottomDialogue();
 	int bottomCharAdvance(const char *p, int *bytes) const;
 	int bottomDrawWrapped(uint8_t *buf, int x, int y, int maxW, const char *s, uint8_t color, bool draw);

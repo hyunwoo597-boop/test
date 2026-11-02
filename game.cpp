@@ -1235,11 +1235,13 @@ void Game::playVideo(const char *name) {
 		sprintf(filePath, "%s/%s", _dataPath, name);
 		File f;
 		if (f.open(filePath)) {
+			bottomMovie(true);
 			_stub->fillRect(0, 0, kGameScreenWidth, kGameScreenHeight, 0);
 			_stub->clearWidescreen();
 			_stub->updateScreen();
 			AVI_Player player(_mixer, _stub);
 			player.play(&f);
+			bottomMovie(false);
 		}
 		free(filePath);
 	}
