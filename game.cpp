@@ -3,6 +3,7 @@
  * Copyright (C) 2007-2011 Gregory Montoir
  */
 
+#include <ctype.h>
 #include <sys/param.h>
 #include <unistd.h>
 #include "avi_player.h"
@@ -17,6 +18,30 @@ static const char *kGameWindowTitle = "Bermuda Syndrome";
 static const char *kGameWindowTitleDemo = "Bermuda Syndrome Demo";
 
 static const char *kGameStateFileNameFormat = "%s/bermuda.%03d";
+
+// 3D pop-out: characters, enemies and usable objects. Scenery, terrain and background decorations stay flat.
+// Matched by base name: trailing '_' and digits removed, lower case ("Pter0_" -> "pter", "Velo03" -> "velo").
+static bool isStereoPopObject(const char *name) {
+	static const char *const kPop[] = {
+		// characters
+		"jack", "girl", "guard", "king", "priest", "pilot", "vizard", "monster", "ritter", "sneack",
+		// enemies and animals
+		"aln", "als", "ant", "bat", "bird", "coel", "crocodile", "dino", "dipl", "dil", "fly", "gallimim", "gar",
+		"gol", "hidra", "pter", "ptero", "ptr", "scorpio", "spider", "stego", "t_rex", "tarbosaur", "varan", "velo", "worm",
+		// usable objects
+		"axt", "ball", "box", "button", "cage", "door", "handle", "horn", "key", "lamp", "lift", "liana", "net", "rope",
+		"raft", "switch",
+	};
+	char base[32];
+	size_t n = 0;
+	for (; name[n] && n < sizeof(base) - 1; ++n) base[n] = (char)tolower((unsigned char)name[n]);
+	base[n] = 0;
+	while (n > 0 && (base[n - 1] == '_' || (base[n - 1] >= '0' && base[n - 1] <= '9'))) base[--n] = 0;
+	for (size_t i = 0; i < sizeof(kPop) / sizeof(kPop[0]); ++i) {
+		if (strcmp(base, kPop[i]) == 0) return true;
+	}
+	return false;
+}
 
 Game::Game(SystemStub *stub, const char *dataPath, const char *savePath, const char *musicPath)
 	: _fs(dataPath), _stub(stub), _dataPath(dataPath), _savePath(savePath), _musicPath(musicPath) {
@@ -1054,7 +1079,7 @@ void Game::redrawObjects() {
 					continue;
 				}
 			}
-			_stub->addStereoObject(so->x, so->y, _sceneObjectFramesTable[so->frameNum].hdr.w, _sceneObjectFramesTable[so->frameNum].hdr.h);
+			_stub->addStereoObject(so->x, so->y, _sceneObjectFramesTable[so->frameNum].hdr.w, _sceneObjectFramesTable[so->frameNum].hdr.h, isStereoPopObject(so->name));
 			if (so->flip == 2) {
 				int16_t y = _bitmapBuffer1.h + 1 - so->y - _sceneObjectFramesTable[so->frameNum].hdr.h;
 				drawObjectVerticalFlip(so->x, y, _tempDecodeBuffer, &_bitmapBuffer1);

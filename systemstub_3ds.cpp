@@ -53,8 +53,8 @@ struct SystemStub_3DS : SystemStub {
 	uint32_t *_bgBuffer; // 640x480 RGB888
 	uint8_t *_bgIndex; // 640x480 palette indices (top-down), set by setStereoBackground()
 	uint8_t *_objMask; // 640x480, 0 = background, else 1 + (row of the object's feet) / 2
-	enum { kMaxStereoObjects = 128 };
-	int16_t _soRect[kMaxStereoObjects][4];
+	enum { kMaxStereoObjects = 128, kFlatDepth = 255 };
+	int16_t _soRect[kMaxStereoObjects][5];
 	int _soCount;
 	bool _stereoPending, _stereoValid, _stereoOn;
 	bool _bgChanged; // background indices or palette changed since _bgBuffer was converted
@@ -198,12 +198,13 @@ struct SystemStub_3DS : SystemStub {
 			memcpy(_bgBuffer + j * _w + x, _gameBuffer + j * _w + x, w * sizeof(uint32_t));
 		}
 	}
-	virtual void addStereoObject(int x, int y, int w, int h) {
+	virtual void addStereoObject(int x, int y, int w, int h, int pop) {
 		if (_soCount < kMaxStereoObjects && w > 0 && h > 0) {
 			_soRect[_soCount][0] = x;
 			_soRect[_soCount][1] = y;
 			_soRect[_soCount][2] = w;
 			_soRect[_soCount][3] = h;
+			_soRect[_soCount][4] = pop != 0;
 			++_soCount;
 		}
 	}
@@ -244,11 +245,10 @@ struct SystemStub_3DS : SystemStub {
 						uint32_t *b = _bgBuffer + j * _w;
 						for (int i = 0; i < w; ++i) b[i] = _pal[bg[i]];
 					}
-					const uint8_t own = 1 + j / 2; // default depth: the pixel's own row
 					uint8_t any = 0;
 					for (int i = 0; i < w; ++i) {
 						d[i] = _pal[src[i]];
-						const uint8_t o = (src[i] != bg[i]) ? own : 0;
+						const uint8_t o = (src[i] != bg[i]) ? kFlatDepth : 0; // flat unless a pop-out object covers it
 						m[i] = o;
 						any |= o;
 					}
@@ -258,7 +258,8 @@ struct SystemStub_3DS : SystemStub {
 				// objects in drawing order (back to front): their pixels take the depth of their feet
 				for (int k = 0; k < _soCount; ++k) {
 					const int ox = _soRect[k][0], oy = _soRect[k][1], ow = _soRect[k][2], oh = _soRect[k][3];
-					if (oh > _h / 2) continue; // big overlays (water, foliage layers) follow the background slope
+					if (!_soRect[k][4]) continue; // scenery stays flat
+					if (oh > _h / 2) continue; // big overlays (water, foliage layers) stay flat
 					const int x0 = MAX(ox, 0), x1 = MIN(ox + ow, _w), y0 = MAX(oy, 0), y1 = MIN(oy + oh, _h);
 					const uint8_t foot = 1 + MIN(oy + oh - 1, _h - 1) / 2;
 					for (int j = y0; j < y1; ++j) {
@@ -563,14 +564,14 @@ struct SystemStub_3DS : SystemStub {
 		const int maxFx = (_w - 1) << 16;
 		const int popOut = (int)(((int64_t)scale * (int)(2.5 * 65536)) >> 16);
 		const int area = (int)(((int64_t)stepX * stepY) >> 24); // source pixels per output pixel, 8.8
-		const int edge = (bgDepth(0, scale) + 0xFFFF) >> 16; // strips only one eye sees
 		// source column -> output column (before the eye shift), once per frame: the 64-bit divide is slow on the 3DS
 		int *xOfCol = _eyeScratch[eye > 0 ? 0 : 1].xOfCol;
 		for (int i = 0; i < _w; ++i) {
 			xOfCol[i] = (int)((((int64_t)(i << 16) + 0x8000 - ox) << 16) / stepX >> 16);
 		}
-		int objD[241]; // object depth by feet row / 2
+		int objD[256]; // object depth by feet row / 2; kFlatDepth = on the screen plane
 		for (int k = 1; k <= 240; ++k) objD[k] = bgDepth((k - 1) * 2, scale) - popOut;
+		objD[kFlatDepth] = 0;
 		for (int yb = 0; yb < kTopH; yb += kBand) {
 			const int nb = MIN((int)kBand, (int)kTopH - yb);
 			for (int by = 0; by < nb; ++by) {
@@ -581,8 +582,7 @@ struct SystemStub_3DS : SystemStub {
 				// background: nearest sample (the picture is downscaled, so bilinear is not worth the cost on the 3DS)
 				const int rowBg = MIN(MAX(fy >> 16, 0), _h - 1);
 				const uint32_t *srow = _bgBuffer + rowBg * _w;
-				const int dBg = (int)(((int64_t)bgDepth(rowBg, scale) * stepX) >> 16) * eye;
-				int fx = ox + stepX / 2 - 0x8000 + dBg;
+				int fx = ox + stepX / 2 - 0x8000; // the background is flat: both eyes see the same picture
 				for (int x = 0; x < outW; ++x, fx += stepX) {
 					int sx = fx >> 16;
 					if (sx < 0) sx = 0; else if (sx > _w - 1) sx = _w - 1;
@@ -624,10 +624,6 @@ struct SystemStub_3DS : SystemStub {
 						const uint32_t bl = (accB[x] + (bb & 0xFF) * nbg) / den;
 						line[x] = (MIN(r, (uint32_t)255) << 16) | (MIN(g, (uint32_t)255) << 8) | MIN(bl, (uint32_t)255);
 					}
-				}
-				for (int x = 0; x < edge && x < outW; ++x) {
-					line[x] = 0;
-					line[outW - 1 - x] = 0;
 				}
 			}
 			// write the band: for each column the rows are contiguous (bottom-up) in the framebuffer
