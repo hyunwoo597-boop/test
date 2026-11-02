@@ -59,8 +59,8 @@ static bool loadBottomVideo() {
 static bool _bottomIntro = true;
 
 void Game::updateBottomVideo() {
-	// bottom.vid is off for now: it does not play on the bottom screen yet (the startup logos show a black screen)
-	const bool show = false;
+	// bottom.vid: only on the title screen (the BERMUDA SYNDROME logo, no menu yet)
+	const bool show = _stub->hasBottomScreen() && _state == kStateBitmap;
 	if (!show) {
 		if (_bvShown) {
 			_stub->setBottomVideo(0, 0, 0);
@@ -125,14 +125,14 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 static int _bsMode;
 
 void Game::updateBottomSplash() {
-	// the title screen and its menu (the controls list keeps the bottom screen), the opening scenes, and the
-	// gameplay when the status bar is hidden (L)
+	// the menu (the controls list keeps the bottom screen), the opening scenes, and the gameplay when the status
+	// bar is hidden (L); the title screen itself shows bottom.vid
 	const bool menu = (_state == kStateMenu1 || _state == kStateMenu2) && !_bottomHelp;
 	int mode = 0;
 	if (_stub->hasBottomScreen()) {
 		if (_bottomIntro) {
 			mode = 1;
-		} else if (_state == kStateBitmap || menu || (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed))) {
+		} else if (menu || (_state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed))) {
 			mode = 2;
 		}
 	}
