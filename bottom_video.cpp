@@ -85,3 +85,54 @@ void Game::updateBottomVideo() {
 		_bvFrame = frame;
 	}
 }
+
+// 3DS: a picture (bottom.jpg-style splash: bottom_splash.jpg, 320x240) on the bottom screen during the title
+// screen and the opening (static PIC scenes). The menus and gameplay keep the bottom screen for their own panels.
+static bool _bsShown;
+
+static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
+	static const char *paths[] = { "bottom_splash.jpg", "romfs:/bottom_splash.jpg", 0 };
+	for (int i = 0; paths[i]; ++i) {
+		File f;
+		if (!f.open(paths[i])) {
+			continue;
+		}
+		const uint32_t size = f.size();
+		uint8_t *data = (uint8_t *)malloc(size);
+		if (!data) {
+			return false;
+		}
+		f.read(data, size);
+		int n;
+		*rgb = stbi_load_from_memory(data, size, w, h, &n, 3);
+		free(data);
+		if (*rgb && *w == 320 && *h == 240) {
+			return true;
+		}
+		if (*rgb) {
+			stbi_image_free(*rgb);
+		}
+		*rgb = 0;
+	}
+	return false;
+}
+
+void Game::updateBottomSplash() {
+	const bool show = _stub->hasBottomScreen() && (_state == kStateBitmap || (_state == kStateGame && _sceneNumber <= -1000));
+	if (show == _bsShown) {
+		return;
+	}
+	_bsShown = show;
+	if (!show) {
+		_stub->setBottomSplash(0, 0, 0);
+		return;
+	}
+	_stub->setBottomPanel(0, 0, 0, 0, 0);
+	_stub->setBottomPanel(1, 0, 0, 0, 0);
+	uint8_t *rgb = 0;
+	int w = 0, h = 0;
+	if (loadBottomSplashFile(&rgb, &w, &h)) {
+		_stub->setBottomSplash(rgb, w, h);
+		stbi_image_free(rgb);
+	}
+}

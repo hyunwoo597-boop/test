@@ -133,6 +133,7 @@ struct SystemStub_3DS : SystemStub {
 		memset(_panelSplit, 0, sizeof(_panelSplit));
 		_bagButton = false;
 		_video = 0; _videoW = _videoH = 0;
+		_splash = 0;
 		_tabPulse = false;
 		_splitBuf = 0;
 		_focusX = _focusY = -1;
@@ -442,6 +443,23 @@ struct SystemStub_3DS : SystemStub {
 	bool _bagButton, _tabPulse;
 	enum { kBagButtonX = kBottomScreenW - 24 - 3, kBagButtonY = 2 };
 	uint8_t *_video; int _videoW, _videoH;
+	uint8_t *_splash;
+	virtual void setBottomSplash(const uint8_t *rgb, int w, int h) {
+		if (!rgb || w != kBottomScreenW || h != kBottomScreenH) {
+			if (_splash) {
+				free(_splash);
+				_splash = 0;
+				_bottomDirty = 2;
+			}
+			return;
+		}
+		if (!_splash) {
+			_splash = (uint8_t *)malloc(w * h * 3);
+			if (!_splash) return;
+		}
+		memcpy(_splash, rgb, w * h * 3);
+		_bottomDirty = 2;
+	}
 	virtual void setBottomVideo(const uint8_t *rgb, int w, int h) {
 		if (!rgb) {
 			if (_video) {
@@ -975,6 +993,11 @@ struct SystemStub_3DS : SystemStub {
 		for (int y = 0; y < kBottomScreenH; ++y) {
 			const bool area = panels && ((y >= kPanelAreaTop && y < kPanelAreaBottom) || _panels[1].rgb); // panels replace the help text
 			for (int x = 0; x < kBottomScreenW; ++x) {
+				if (!area && _splash) {
+					const uint8_t *p = _splash + (y * kBottomScreenW + x) * 3;
+					putPixel(fb, x, y, (p[0] << 16) | (p[1] << 8) | p[2]);
+					continue;
+				}
 				putPixel(fb, x, y, area ? kBottomPalette[0] : _bottom[y * kBottomScreenW + x]);
 			}
 		}

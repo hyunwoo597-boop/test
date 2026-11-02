@@ -70,6 +70,7 @@ struct SystemStub {
 	virtual void setBottomPanel(int id, const uint8_t *bits, int w, int h, int pitch) {}
 	virtual void setBottomPanelSplit(int id, int splitX) {}
 	virtual void setBottomVideo(const uint8_t *rgb, int w, int h) {} // 3DS: video frame (RGB24, top-down) in the middle of the bottom screen, 0 = off
+	virtual void setBottomSplash(const uint8_t *rgb, int w, int h) {} // 3DS: full bottom-screen picture (320x240 RGB24) for intro/opening screens, 0 = off
 	virtual void addStereoObject(int x, int y, int w, int h, int pop) {} // 3DS: rectangle (top-down) of a scene object drawn in the next full frame; pop = stands out of the screen, its bottom edge sets its depth
 	virtual void setStereoBackground(const uint8_t *buf, int pitch) {} // 3DS: scene background of the next full frame (bottom-up), objects are drawn in front of it
 	virtual void setBagButton(bool visible) {} // 3DS: bag button in the top-right corner of the bottom screen

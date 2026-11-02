@@ -403,6 +403,7 @@ void Game::mainLoop() {
 		_stub->setFocus(fx, fy);
 	}
 	updateBottomVideo();
+	updateBottomSplash();
 	_stub->updateScreen();
 }
 
