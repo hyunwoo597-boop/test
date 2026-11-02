@@ -55,8 +55,12 @@ static bool loadBottomVideo() {
 	return false;
 }
 
+// the startup logo movies, until the first frame of the main loop
+static bool _bottomIntro = true;
+
 void Game::updateBottomVideo() {
-	const bool show = _stub->hasBottomScreen() && _state == kStateGame && !_lifeBarDisplayed && _sceneNumber > -1000;
+	// bottom.vid: the startup logos and the title screen
+	const bool show = _stub->hasBottomScreen() && (_bottomIntro || _state == kStateBitmap);
 	if (!show) {
 		if (_bvShown) {
 			_stub->setBottomVideo(0, 0, 0);
@@ -86,8 +90,8 @@ void Game::updateBottomVideo() {
 	}
 }
 
-// 3DS: a picture (bottom.jpg-style splash: bottom_splash.jpg, 320x240) on the bottom screen during the title
-// screen and the opening (static PIC scenes). The menus and gameplay keep the bottom screen for their own panels.
+// 3DS: a picture (bottom_splash.jpg, 320x240) on the bottom screen during the opening scenes
+// The menus keep the bottom screen for their own panels.
 static bool _bsShown;
 
 static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
@@ -117,11 +121,10 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 	return false;
 }
 
-static bool _bsStartup = true; // until the first frame of the main loop: the startup logo movies
-
 void Game::updateBottomSplash() {
-	const bool show = _stub->hasBottomScreen() && (_bsStartup || _state == kStateBitmap || (_state == kStateGame && _sceneNumber <= -1000));
-	_bsStartup = false;
+	// bottom_splash.jpg: the opening scenes, and the gameplay when the status bar is hidden (L)
+	const bool show = _stub->hasBottomScreen() && _state == kStateGame && (_sceneNumber <= -1000 || !_lifeBarDisplayed);
+	_bottomIntro = false;
 	if (show == _bsShown) {
 		return;
 	}
