@@ -57,6 +57,7 @@ static bool loadBottomVideo() {
 
 // the startup logo movies, until the first frame of the main loop
 static bool _bottomIntro = true;
+static bool _bsMovie; // an AVI movie is playing: the bottom screen follows the movie, not the game state
 
 void Game::updateBottomVideo() {
 	// bottom.vid: only on the title screen (the BERMUDA SYNDROME logo, no menu yet)
@@ -123,7 +124,6 @@ static bool loadBottomSplashFile(uint8_t **rgb, int *w, int *h) {
 
 // 0 = off, 1 = black (startup logos), 2 = the picture
 static int _bsMode;
-static bool _bsMovie; // an AVI movie is playing: the bottom screen follows the movie, not the game state
 
 void Game::applyBottomSplash() {
 	// the menu (the controls list keeps the bottom screen), the opening scenes, and the gameplay when the status
