@@ -1037,6 +1037,21 @@ void Game::redrawObjects() {
 			const SceneObject *so = _sortedSceneObjectsTable[i];
 			if (so->state != 1 && so->state != 2) continue;
 			const SceneObjectFrameHeader &hh = _sceneObjectFramesTable[so->frameNum].hdr;
+			if (so->x >= 300 && so->y >= 380 && strcasecmp(so->name, "JACK") != 0) {
+				// DIAG: log each distinct bottom-right object once (air gauge geometry)
+				static uint32_t diagKeys[96];
+				static int diagCount = 0;
+				uint32_t key = (uint32_t)so->x * 73856093u ^ (uint32_t)so->y * 19349663u ^ (uint32_t)hh.w * 83492791u ^ (uint32_t)hh.h * 2654435761u;
+				for (char *c = so->name; *c; ++c) key = key * 31 + (uint8_t)*c;
+				bool seen = false;
+				for (int k = 0; k < diagCount; ++k) if (diagKeys[k] == key) { seen = true; break; }
+				if (!seen && diagCount < 96) {
+					diagKeys[diagCount++] = key;
+					char buf[160];
+					snprintf(buf, sizeof(buf), "name=%s x=%d y=%d w=%d h=%d state=%d scene=%d", so->name, so->x, so->y, hh.w, hh.h, so->state, _sceneNumber);
+					loadLogWrite("diag_obj", buf, 0);
+				}
+			}
 			if (hh.h <= 48 && hh.w <= 260 && hh.w >= 3 * hh.h && so->x >= 400 && so->y >= 420 && so->y + hh.h >= 460 && strcasecmp(so->name, "JACK") != 0) {
 				if (so->x < gx0) gx0 = so->x;
 				if (so->y < gy0) gy0 = so->y;
