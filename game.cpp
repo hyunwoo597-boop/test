@@ -1174,6 +1174,7 @@ void Game::redrawObjects() {
 		}
 #endif
 	}
+	_stub->setStereoBackground(_bitmapBuffer3.bits, _bitmapBuffer3.pitch);
 	win16_stretchBits(&_bitmapBuffer1, _bitmapBuffer1.h + 1, _bitmapBuffer1.w + 1, 0, 0, _bitmapBuffer1.h + 1, _bitmapBuffer1.w + 1, 0, 0);
 	memcpy(_bitmapBuffer1.bits, _bitmapBuffer3.bits, kGameScreenWidth * kGameScreenHeight);
 	if (_lifeBarDisplayed) {

@@ -49,6 +49,11 @@ struct SystemStub_3DS : SystemStub {
 
 	uint32_t _pal[256];
 	uint32_t *_gameBuffer; // 640x480 RGB888
+	// stereoscopic 3D: the scene background without objects, and which pixels are objects
+	uint32_t *_bgBuffer; // 640x480 RGB888
+	uint8_t *_bgIndex; // 640x480 palette indices (top-down), set by setStereoBackground()
+	uint8_t *_objMask; // 640x480, 1 = object pixel
+	bool _stereoPending, _stereoValid, _stereoOn;
 	int _w, _h;
 	Mixer *_mixer;
 
@@ -72,7 +77,7 @@ struct SystemStub_3DS : SystemStub {
 	int16_t *_audioMem;
 
 	SystemStub_3DS()
-		: _gameBuffer(0), _w(0), _h(0), _yuvMode(false), _yuvW(0), _yuvH(0), _yuvBuffer(0),
+		: _gameBuffer(0), _bgBuffer(0), _bgIndex(0), _objMask(0), _stereoPending(false), _stereoValid(false), _stereoOn(false), _w(0), _h(0), _yuvMode(false), _yuvW(0), _yuvH(0), _yuvBuffer(0),
 		  _bottomDirty(2), _ndspOk(false), _audioRunning(false), _audioThread(0),
 		  _audioProc(0), _audioParam(0), _audioMem(0) {
 		memset(_pal, 0, sizeof(_pal));
@@ -92,6 +97,10 @@ struct SystemStub_3DS : SystemStub {
 		_w = w;
 		_h = h;
 		_gameBuffer = (uint32_t *)calloc(w * h, sizeof(uint32_t));
+		_bgBuffer = (uint32_t *)calloc(w * h, sizeof(uint32_t));
+		_bgIndex = (uint8_t *)calloc(w * h, 1);
+		_objMask = (uint8_t *)calloc(w * h, 1);
+		_stereoPending = _stereoValid = _stereoOn = false;
 		if (!_gameBuffer) {
 			error("SystemStub_3DS::init() unable to allocate game buffer");
 		}
@@ -115,6 +124,12 @@ struct SystemStub_3DS : SystemStub {
 		shutdownAudio();
 		free(_gameBuffer);
 		_gameBuffer = 0;
+		free(_bgBuffer);
+		_bgBuffer = 0;
+		free(_bgIndex);
+		_bgIndex = 0;
+		free(_objMask);
+		_objMask = 0;
 		free(_yuvBuffer);
 		_yuvBuffer = 0;
 	}
@@ -138,9 +153,46 @@ struct SystemStub_3DS : SystemStub {
 			}
 			dst += _w;
 		}
+		flattenStereo(x, y, w, h);
+	}
+	// pixels drawn outside a full scene frame (dialogue boxes, fades) sit on the background plane
+	void flattenStereo(int x, int y, int w, int h) {
+		if (!_stereoValid || !_objMask) return;
+		for (int j = y; j < y + h; ++j) {
+			memset(_objMask + j * _w + x, 0, w);
+			memcpy(_bgBuffer + j * _w + x, _gameBuffer + j * _w + x, w * sizeof(uint32_t));
+		}
+	}
+	virtual void setStereoBackground(const uint8_t *buf, int pitch) {
+		if (!_bgIndex) return;
+		buf += (_h - 1) * pitch; // bottom-up
+		for (int j = 0; j < _h; ++j) {
+			memcpy(_bgIndex + j * _w, buf, _w);
+			buf -= pitch;
+		}
+		_stereoPending = true;
 	}
 	virtual void copyRect(int x, int y, int w, int h, const uint8_t *buf, int pitch, bool transparent) {
 		if (x < 0 || y < 0 || x + w > _w || y + h > _h) return;
+		if (x == 0 && y == 0 && w == _w && h == _h && !transparent) {
+			// a whole frame: it is a scene with objects only right after setStereoBackground()
+			_stereoValid = _stereoPending && _bgBuffer && _bgIndex && _objMask;
+			_stereoPending = false;
+			if (_stereoValid) {
+				const uint8_t *src = buf + (h - 1) * pitch;
+				for (int j = 0; j < h; ++j, src -= pitch) {
+					const uint8_t *bg = _bgIndex + j * _w;
+					uint8_t *m = _objMask + j * _w;
+					uint32_t *d = _gameBuffer + j * _w, *b = _bgBuffer + j * _w;
+					for (int i = 0; i < w; ++i) {
+						d[i] = _pal[src[i]];
+						b[i] = _pal[bg[i]];
+						m[i] = src[i] != bg[i];
+					}
+				}
+				return;
+			}
+		}
 		uint32_t *dst = _gameBuffer + y * _w + x;
 		buf += (h - 1) * pitch; // source bitmaps are bottom-up
 		for (int j = 0; j < h; ++j) {
@@ -152,6 +204,7 @@ struct SystemStub_3DS : SystemStub {
 			dst += _w;
 			buf -= pitch;
 		}
+		flattenStereo(x, y, w, h);
 	}
 	virtual void darkenRect(int x, int y, int w, int h) {
 		if (!clip(x, y, w, h)) return;
@@ -162,6 +215,7 @@ struct SystemStub_3DS : SystemStub {
 			}
 			dst += _w;
 		}
+		flattenStereo(x, y, w, h);
 	}
 	virtual void copyRectWidescreen(int w, int h, const uint8_t *buf, int pitch) {}
 	virtual void clearWidescreen() {}
@@ -337,13 +391,15 @@ struct SystemStub_3DS : SystemStub {
 		_focusY = y;
 	}
 
-	// bilinear sample of the 640x480 buffer at 16.16 fixed point coordinates
-	inline uint32_t sample(int fx, int fy) const {
+	// bilinear sample of a 640x480 buffer at 16.16 fixed point coordinates
+	inline uint32_t sampleBuf(const uint32_t *buf, int fx, int fy) const {
+		if (fx < 0) fx = 0;
+		if (fy < 0) fy = 0;
 		int x0 = fx >> 16, y0 = fy >> 16;
 		if (x0 > _w - 2) x0 = _w - 2;
 		if (y0 > _h - 2) y0 = _h - 2;
 		const uint32_t ax = (fx >> 8) & 0xFF, ay = (fy >> 8) & 0xFF;
-		const uint32_t *p = _gameBuffer + y0 * _w + x0;
+		const uint32_t *p = buf + y0 * _w + x0;
 		const uint32_t a = p[0], b = p[1], c = p[_w], d = p[_w + 1];
 		const uint32_t w00 = (256 - ax) * (256 - ay), w10 = ax * (256 - ay), w01 = (256 - ax) * ay, w11 = ax * ay;
 		const uint32_t r = (((a >> 16) & 0xFF) * w00 + ((b >> 16) & 0xFF) * w10 + ((c >> 16) & 0xFF) * w01 + ((d >> 16) & 0xFF) * w11) >> 16;
@@ -351,10 +407,109 @@ struct SystemStub_3DS : SystemStub {
 		const uint32_t bl = ((a & 0xFF) * w00 + (b & 0xFF) * w10 + (c & 0xFF) * w01 + (d & 0xFF) * w11) >> 16;
 		return (r << 16) | (g << 8) | bl;
 	}
+	inline uint32_t sample(int fx, int fy) const {
+		return sampleBuf(_gameBuffer, fx, fy);
+	}
+
+	// where the 640x480 picture goes on the 400x240 screen: source step and offset (16.16), output columns
+	void computeView(int &stepX, int &stepY, int &ox, int &oy, int &outX, int &outW) {
+		static const int kZoomStep[] = { 0x20000 /* 2.0 */, 0, 0x19999 /* 1.6 */, 0x13333 /* 1.2 */, 0x10000 /* 1.0 */ };
+		outX = 0;
+		outW = kTopW;
+		ox = oy = 0;
+		if (_viewMode == 0) {
+			stepX = stepY = kZoomStep[0];
+			outX = 40;
+			outW = 320;
+			return;
+		}
+		stepX = (_viewMode == 1) ? (_w << 16) / kTopW : kZoomStep[_viewMode];
+		stepY = (_viewMode == 1) ? (_h << 16) / kTopH : stepX;
+		if (_viewMode >= 2) {
+			const int maxX = (_w << 16) - kTopW * stepX;
+			const int maxY = (_h << 16) - kTopH * stepY;
+			int tx = maxX / 2, ty = maxY / 2;
+			if (_focusX >= 0) tx = (_focusX << 16) - (kTopW / 2) * stepX;
+			if (_focusY >= 0) ty = (_focusY << 16) - (kTopH / 2) * stepY;
+			if (_panRecenter) { // ease the manual scroll back to zero
+				_panX -= _panX / 4;
+				_panY -= _panY / 4;
+				if (abs(_panX) < 0x10000 && abs(_panY) < 0x10000) { _panX = _panY = 0; _panRecenter = false; }
+			}
+			tx += _panX;
+			ty += _panY;
+			// keep the manual offset inside the picture so stick moves always have a visible effect
+			if (tx < 0) _panX -= tx;
+			if (tx > maxX) _panX -= tx - maxX;
+			if (ty < 0) _panY -= ty;
+			if (ty > maxY) _panY -= ty - maxY;
+			if (tx < 0) tx = 0;
+			if (tx > maxX) tx = maxX;
+			if (ty < 0) ty = 0;
+			if (ty > maxY) ty = maxY;
+			if (_zoomOffsetY < 0) {
+				_zoomOffsetX = tx;
+				_zoomOffsetY = ty;
+			} else {
+				_zoomOffsetX += (tx - _zoomOffsetX) / 6; // smooth follow
+				_zoomOffsetY += (ty - _zoomOffsetY) / 6;
+			}
+			ox = _zoomOffsetX;
+			oy = _zoomOffsetY;
+		}
+	}
+
+	// one eye of the stereo picture: background pushed behind the screen, objects in front of it
+	// eye = +1 left, -1 right; bgShift/objShift in output pixels (16.16)
+	void renderEye(uint8_t *fb, int eye, int bgShift, int objShift, int stepX, int stepY, int ox, int oy, int outX, int outW) {
+		const int dBg = (int)(((int64_t)bgShift * stepX) >> 16) * eye;
+		const int dObj = (int)(((int64_t)objShift * stepX) >> 16) * eye;
+		const int maxFx = (_w - 1) << 16;
+		for (int y = 0; y < kTopH; ++y) {
+			int fy = oy + y * stepY + stepY / 2 - 0x8000;
+			if (fy < 0) fy = 0;
+			const uint8_t *mrow = _objMask + MIN(fy >> 16, _h - 1) * _w;
+			int fx = ox + stepX / 2 - 0x8000;
+			for (int x = 0; x < outW; ++x, fx += stepX) {
+				int sx = fx - dObj; // objects: left eye sees them shifted right
+				if (sx < 0) sx = 0; else if (sx > maxFx) sx = maxFx;
+				uint32_t c;
+				if (mrow[(sx + 0x8000) >> 16 < _w ? (sx + 0x8000) >> 16 : _w - 1]) {
+					c = sampleBuf(_gameBuffer, sx, fy);
+				} else {
+					int bx = fx + dBg; // background: left eye sees it shifted left
+					if (bx > maxFx) bx = maxFx;
+					c = sampleBuf(_bgBuffer, bx, fy);
+				}
+				putPixel(fb, outX + x, y, c);
+			}
+		}
+		if (outX > 0) {
+			clearSideBars(fb);
+		}
+	}
 
 	virtual void updateScreen() {
 		if (_yuvMode) {
 			return; // cutscene frames are presented from unlockYUV()
+		}
+		int stepX, stepY, ox, oy, outX, outW;
+		computeView(stepX, stepY, ox, oy, outX, outW);
+		const float slider = osGet3DSliderState();
+		const bool stereo = _stereoValid && slider > 0.01f;
+		if (stereo != _stereoOn) {
+			_stereoOn = stereo;
+			gfxSet3D(stereo);
+		}
+		if (stereo) {
+			// up to 3 px behind the screen for the background, 2 px in front of it for objects (per eye)
+			const int bgShift = (int)(slider * 3.0f * 65536), objShift = (int)(slider * 2.0f * 65536);
+			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0), 1, bgShift, objShift, stepX, stepY, ox, oy, outX, outW);
+			renderEye(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, 0, 0), -1, bgShift, objShift, stepX, stepY, ox, oy, outX, outW);
+			presentBottom();
+			gfxFlushBuffers();
+			gfxSwapBuffers();
+			return;
 		}
 		uint8_t *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0);
 		if (_viewMode == 0) {
@@ -371,44 +526,6 @@ struct SystemStub_3DS : SystemStub {
 			}
 			clearSideBars(fb);
 		} else {
-			// mode 1: whole screen stretched to 400x240
-			// mode 2..4: zoomed view (source step 1.6 / 1.2 / 1.0 pixel), scrolling with Jack
-			static const int kZoomStep[] = { 0, 0, 0x19999 /* 1.6 */, 0x13333 /* 1.2 */, 0x10000 /* 1.0 */ };
-			const int stepX = (_viewMode == 1) ? (_w << 16) / kTopW : kZoomStep[_viewMode];
-			const int stepY = (_viewMode == 1) ? (_h << 16) / kTopH : stepX;
-			int ox = 0, oy = 0;
-			if (_viewMode >= 2) {
-				const int maxX = (_w << 16) - kTopW * stepX;
-				const int maxY = (_h << 16) - kTopH * stepY;
-				int tx = maxX / 2, ty = maxY / 2;
-				if (_focusX >= 0) tx = (_focusX << 16) - (kTopW / 2) * stepX;
-				if (_focusY >= 0) ty = (_focusY << 16) - (kTopH / 2) * stepY;
-				if (_panRecenter) { // ease the manual scroll back to zero
-					_panX -= _panX / 4;
-					_panY -= _panY / 4;
-					if (abs(_panX) < 0x10000 && abs(_panY) < 0x10000) { _panX = _panY = 0; _panRecenter = false; }
-				}
-				tx += _panX;
-				ty += _panY;
-				// keep the manual offset inside the picture so stick moves always have a visible effect
-				if (tx < 0) _panX -= tx;
-				if (tx > maxX) _panX -= tx - maxX;
-				if (ty < 0) _panY -= ty;
-				if (ty > maxY) _panY -= ty - maxY;
-				if (tx < 0) tx = 0;
-				if (tx > maxX) tx = maxX;
-				if (ty < 0) ty = 0;
-				if (ty > maxY) ty = maxY;
-				if (_zoomOffsetY < 0) {
-					_zoomOffsetX = tx;
-					_zoomOffsetY = ty;
-				} else {
-					_zoomOffsetX += (tx - _zoomOffsetX) / 6; // smooth follow
-					_zoomOffsetY += (ty - _zoomOffsetY) / 6;
-				}
-				ox = _zoomOffsetX;
-				oy = _zoomOffsetY;
-			}
 			for (int y = 0; y < kTopH; ++y) {
 				int fy = oy + y * stepY + stepY / 2 - 0x8000;
 				if (fy < 0) fy = 0;
@@ -606,6 +723,10 @@ struct SystemStub_3DS : SystemStub {
 		memset(fb + 360 * 240 * 3, 0, 40 * 240 * 3);
 	}
 	void clearTop() {
+		if (_stereoOn) {
+			_stereoOn = false;
+			gfxSet3D(false);
+		}
 		for (int i = 0; i < 2; ++i) {
 			uint8_t *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, 0, 0);
 			memset(fb, 0, kTopW * kTopH * 3);
