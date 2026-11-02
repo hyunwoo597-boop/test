@@ -8,6 +8,7 @@
 #include "file.h"
 #include "fs.h"
 #include "game.h"
+#include "loadlog.h"
 #include "str.h"
 
 static const bool kDumpObjectScript = false;
@@ -146,6 +147,7 @@ uint8_t *Game::loadFile(const char *fileName, uint8_t *dst, uint32_t *dstSize) {
 }
 
 void Game::loadWGP(const char *fileName) {
+	LoadTimer loadTime(_stub, "wgp", fileName);
 	debug(DBG_RES, "Game::loadWGP('%s')", fileName);
 	FileHolder fp(_fs, fileName);
 	int offs = kOffsetBitmapBits;
@@ -250,6 +252,7 @@ static void dumpObjectScript(SceneAnimation *sa, const char *dirPath, const char
 }
 
 void Game::loadMOV(const char *fileName) {
+	LoadTimer loadTime(_stub, "mov", fileName);
 	debug(DBG_RES, "Game::loadMOV('%s')", fileName);
 	FileHolder fp(_fs, fileName);
 	int tag = fp->readUint16LE();

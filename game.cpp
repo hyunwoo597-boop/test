@@ -10,6 +10,7 @@
 #include "decoder.h"
 #include "file.h"
 #include "game.h"
+#include "loadlog.h"
 #include "mixer.h"
 #include "str.h"
 #include "systemstub.h"
@@ -259,6 +260,7 @@ void Game::mainLoop() {
 					break;
 				}
 				strcpy(_currentSceneScn, _tempTextBuffer);
+				LoadTimer loadScene(_stub, "scene", _tempTextBuffer);
 				parseSCN(_tempTextBuffer);
 			} else {
 				debug(DBG_GAME, "load mov '%s'", _tempTextBuffer);
@@ -1262,6 +1264,7 @@ void Game::stopMusic() {
 }
 
 void Game::playMusic(const char *name) {
+	LoadTimer loadMusic(_stub, "music", name);
 	static const struct {
 		const char *fileName;
 		int digitalTrack;
